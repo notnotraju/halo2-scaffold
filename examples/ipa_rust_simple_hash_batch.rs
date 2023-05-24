@@ -1,5 +1,4 @@
-// in this code, we eliminate the ``seed randomness'' *as well as*
-// the hash of the stage-proofs. We still use Poseidon, but it is
+// We still use Poseidon, but it is
 // more of a fig leaf.
 
 
@@ -87,6 +86,7 @@ pub fn inner_product(vec_a: &[Fr], vec_b: &[Fr]) -> Fr {
 }
 
 // compute L and R from vec_a, vec_g, vec_b, and U.
+// this is a prover util.
 pub fn compute_L_R(vec_a: &Vec<Fr>, vec_g: &Vec<G1Affine>,
                     vec_b: &Vec<Fr>, U: &G1Affine) 
                             -> (G1Affine, G1Affine) {
@@ -131,7 +131,7 @@ pub fn binary_counting_pattern(vec_w: &Vec<Fr>)-> Vec<Fr> {
     }
     pattern
 }
-
+// and its reverse
 pub fn binary_counting_pattern_reverse(vec_w_rev: &Vec<Fr>)->Vec<Fr>{
     let mut w_vec = vec_w_rev.clone();
     w_vec.reverse();
@@ -208,7 +208,7 @@ pub fn u64_to_bin_vec(n: u64, l: u64)->Vec<Fr>{
 // compute b_0 given z and the stage_randomness (w_k, ..., w_1).
 // algorithm: compute prod(w_j^{-1}+ w_jz^{2^{j-1}})
 // where w_j is the k-jth element of stage_randomness.
-// this goes from j = 0 to j = k-1.
+// this product goes from ###j = 0 to j = k-1### j=1 to j=k?
 pub fn compute_b_fin_poly(z: &Fr, stage_randomness: &[Fr])-> Fr{
     let k = stage_randomness.len();
     let mut two_primary_powers_of_z = vec![*z];
@@ -234,6 +234,12 @@ pub fn compute_b_fin_poly(z: &Fr, stage_randomness: &[Fr])-> Fr{
 // final_a is the final a value.
 // note that we do not need any final_b, because b is assumed 
 // to be known, hence the verifier can simply compute b herself.
+// batching_helper_info contains the claimed stage_randomness
+// as well as the claimed g_0. This is useful when we batch proofs.
+
+// the model here is that the other inputs needed for the proof,
+// namely g_init, z, and revealed evaluation, are all
+// assumed to be public.
 #[derive(Debug, Clone)]
 pub struct proof_of_inclusion {
 //    pub random_field_element: Fr,
@@ -257,7 +263,7 @@ pub struct batched_proof_of_inclusion{
 // contains all of the information we need for the verifier to
 // verify a single IPA proof.
 #[derive(Debug, Clone)]
-pub struct single_IPA_proof{
+pub struct single__IPA_proof{
     pub commitment: G1Affine,
     pub z: Fr,
     pub proof: proof_of_inclusion,
@@ -509,19 +515,14 @@ pub fn generate_batch_evaluation_proof(
 }
 
 
-pub fn verify_single_evaluation_proof(
-    single_IPA_proof: single_IPA_proof,
-    // commitment: &G1Affine,
-    // z: &Fr,              
-    // proof: &proof_of_inclusion,
-    // g_init: &Vec<G1Affine>, // URS
-    // U: &G1Affine            // another random group element.
+pub fn verify_single_evaluation_proof (
+    single__IPA_proof: single__IPA_proof,
     ) -> bool {
-    let commitment = &single_IPA_proof.commitment;
-    let z = &single_IPA_proof.z;
-    let proof = &single_IPA_proof.proof;
-    let g_init = &single_IPA_proof.g_init;
-    let U = &single_IPA_proof.U;
+    let commitment = &single__IPA_proof.commitment;
+    let z = &single__IPA_proof.z;
+    let proof = &single__IPA_proof.proof;
+    let g_init = &single__IPA_proof.g_init;
+    let U = &single__IPA_proof.U;
     let n = g_init.len();
     assert!(check_power_of_two(n));
     let k = int_log_2(n);
@@ -541,7 +542,7 @@ pub fn verify_single_evaluation_proof(
     let G_0 = MSM(g_init, &binary_counting_pattern_reverse(&stage_randomness));
     // compute b_0 
     let b_0 = compute_b_fin_poly(&z, &stage_randomness);
-    println!("b_0: {:?}", b_0);
+    // println!("b_0: {:?}", b_0);
     let mut L: Vec<G1Affine> = Vec::new();
     let mut R: Vec<G1Affine> = Vec::new();
     stage_proofs.iter().for_each(|[l, r]|{
@@ -610,7 +611,7 @@ pub fn verify_batch_evaluation_proof(
         .fold(Fr::zero(), |acc, x| acc + x);
     // check single proof of evaluation.
 
-    let final_evaluation_proof = single_IPA_proof{
+    let final_evaluation_proof = single__IPA_proof{
         commitment: *commitment_to_weighted_poly,
         z: t,
         proof: proof_of_weighted_poly.clone(),
@@ -623,7 +624,7 @@ pub fn verify_batch_evaluation_proof(
 
 #[test]
 fn test_batched_ipa(){
-    let batch_size = 10;
+    let batch_size = 50;
     let k = 8;
     let n = pow(2, k);
     let mut g_init = Vec::new();
@@ -651,7 +652,8 @@ fn test_batched_ipa(){
         g_init: g_init.clone(),
         U: U.clone(),
     };
-    assert!(verify_batch_evaluation_proof(&batched_IPA_proof));
+    let did_it_work = verify_batch_evaluation_proof(&batched_IPA_proof);
+    assert!(did_it_work);
 }
 
 #[test]
@@ -670,13 +672,9 @@ fn test_ipa() {
     // let vector_to_commit = vec![Fr::from(1000), Fr::from(2), Fr::one(), Fr::one()];
     let commitment = MSM(&g_init, &vector_to_commit);
     let z = Fr::from(1000 as u64);
-    
-    // let revealed_elt = inner_product(&vector_to_commit, 
-    //                                 &usize_to_unit_vec(i, n));
-    // println!("Checking correctness of revealed elt: the following should be zero {:?}",
-    //     vector_to_commit[i]-revealed_elt);
+
     let proof = generate_single_evaluation_proof(&g_init, &U, &vector_to_commit, &z, false);
-    let complete_proof = single_IPA_proof {
+    let complete_proof = single__IPA_proof {
         commitment,
         z,
         proof,
@@ -702,7 +700,7 @@ fn test_b_fin_poly(){
 
 
 
-pub fn test_ipa_export(k: usize)-> single_IPA_proof {
+pub fn test_ipa_export(k: usize)-> single__IPA_proof {
     let n = pow(2,k);
     let mut g_init = Vec::new();
     for _ in 0..n {
@@ -719,7 +717,7 @@ pub fn test_ipa_export(k: usize)-> single_IPA_proof {
     let proof =
         generate_single_evaluation_proof(&g_init, &U, &vector_to_commit, &z, false);
     let single_proof = 
-            single_IPA_proof{
+            single__IPA_proof{
             commitment,
             z,
             proof,
