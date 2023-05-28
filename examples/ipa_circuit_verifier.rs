@@ -12,7 +12,10 @@ use binary_counting::{binary_counting_reverse, binary_counting_input};
 use halo2_base::gates::range;
 use halo2_base::halo2_proofs::plonk::Assigned;
 use halo2_base::utils::bigint_to_fe;
+use halo2_base::utils::biguint_to_fe;
+use halo2_base::utils::fe_to_biguint;
 use halo2_proofs::plonk::Circuit;
+use ipa_rust_clean::hash_group_to_field;
 // use ipa_rust_simple_hash_batch::{proof_of_inclusion, single__IPA_proof, 
 //                                 test_ipa_export, generate_hasher,
 //                                 batch_IPA_proof};
@@ -195,8 +198,12 @@ pub fn compute_stage_randomness_single_proof(
     
     let mut r = revealed_evaluation.value();
     for i in 1..k{
-        let new_randomness = gate.mul(ctx, 
+        let power_of_revealed_evaluation = gate.mul(ctx, 
             revealed_evaluation, stage_randomness[i-1]);
+        let L_hash = hash_group_to_field_circuit(ctx, gate, L[i].clone());
+        let R_hash = hash_group_to_field_circuit(ctx, gate, R[i].clone());
+        let preliminary_randomness = gate.add(ctx, power_of_revealed_evaluation, L_hash);
+        let new_randomness = gate.add(ctx, preliminary_randomness, R_hash);
         stage_randomness.push(new_randomness);
     }
     for i in 0..k{
@@ -604,6 +611,7 @@ pub fn verify_batch_IPA_proof(
     let mut vec_stage_randomness: Vec<Vec<AssignedValue<Fr>>> = Vec::new();
     let mut vec_stage_randomness_inv: Vec<Vec<AssignedValue<Fr>>> = Vec::new();
 
+
     for i in 0..m {
         let (stage_randomness, stage_randomness_inv) = 
             compute_stage_randomness_single_proof(builder, &gate, &params, vec_z[i], vec_revealed_evaluation[i], vec_L[i].clone(), vec_R[i].clone(), k);
@@ -650,6 +658,15 @@ pub fn verify_batch_IPA_proof(
     
   }
 
+  pub fn hash_group_to_field_circuit(
+    // builder: &mut GateThreadBuilder<Fr>,
+    ctx: &mut Context<Fr>,
+    gate: &GateChip<Fr>,
+    p: EcPoint<Fr, CRTInteger<Fr>>
+  )->AssignedValue<Fr>{
+    gate.add(ctx, p.x.native, p.y.native)    
+  }
+
 fn main() {
     // std::env::set_var("RUST_BACKTRACE", "1");
     env_logger::init();
@@ -661,12 +678,15 @@ fn main() {
     )
     .unwrap();
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
-    let private_inputs = test_ipa_export(2);
-    let batch_private_inputs = test_batch_ipa_export(3,30);
+    std::env::set_var("DEGREE", 4.to_string());
+    let private_inputs = test_ipa_export(3);
+    let random_group_element = G1Affine::random(&mut OsRng);
+    let batch_private_inputs = test_batch_ipa_export(2,30);
     // run_builder_on_inputs(verify_single_IPA_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
     //run_builder_on_inputs(verify_single_IPA_proof, args, private_inputs);
     run_builder_on_inputs(verify_batch_IPA_proof, args, batch_private_inputs);
+    // run_builder_on_inputs(group_to_field, args, random_group_element);
 }
 
 

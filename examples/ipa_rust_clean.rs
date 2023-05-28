@@ -33,7 +33,75 @@ use num_traits::pow;
 //     io::{BufRead, BufReader},
 // };
 
+// test 2-primary root of unity stuff.
+// seems that root_of_unity() has order 2^{28}
+// to compute lagrange basis for 2^n, we need the "barycentric formula"
+#[test]
+fn compute_2_primary_root_of_unity(){
+    let base = Fr::root_of_unity();
+    let mut i=0;
+    let mut power = base;
+    while power != Fr::one() {
+        power = power.square();
+        i+=1;
+    }
+    println!("i is {}", i);
+}
+// order is 2^{28}
+pub fn compute_2_k_root(k: usize, log_order: usize) -> Fr {
+    let base = Fr::root_of_unity();
+    let mut answer = base;
+    let goal_order = log_order - k;
+    for _ in 0..goal_order {
+        answer = answer.square();
+    }
+    answer
+}
+#[test]
+fn test_2_k_root(){
+    let test_answer = compute_2_k_root(2, 28);
+    assert_eq!(test_answer.square().square(), Fr::one());
+}
+// compute a "lagrange basis" for 2^k roots of unity.
+// we assume here that k<=10.
+// more precisely, set n=2^k and \omega a primitive nth root of unity.
+// then P_i is the degree n polynomial that is 1 at \omega^i and
+// 0 at the other nth roots of unity.
 
+// we use the formula (derived from Feist's notes):
+// P_i = 1/2^k * [1=omega^{2^k}, \omega^{2^k-i},...,\omega^i]
+// specialized for F_r, based on the fact that 2^28 is the
+// power of 2 dividing r-1.
+pub fn langrange_basis(k: usize)->Vec<Vec<Fr>> {
+    let mut lagrange_basis: Vec<Vec<Fr>> = Vec::new();
+    let omega = compute_2_k_root(k, 28);
+    let two_k_u64 = 2u64.pow(k as u32);
+    let mut powers_of_omega: Vec<Fr> = Vec::new();
+    {
+        let mut current_power_of_omega = Fr::one();
+        for i in 0..two_k_u64 {
+            powers_of_omega.push(current_power_of_omega);
+            current_power_of_omega *= omega;
+        }
+    }
+    // denominator as a field element.
+    let two_k_inv = Fr::from(two_k_u64).invert().unwrap();
+    
+    // for i in 0..two_k_u64{
+    //     let lagrange_poly = (1..k)
+    //         .map(|j| powers_of_omega[(i*j as usize)]*two_k_inv)
+    //         .collect::<Vec<_>>();
+
+    // }
+    unimplemented!();
+}
+
+pub fn hash_group_to_field(p: G1Affine)->Fr{
+    let (x, y) = (p.x, p.y);
+    let (x, y) = (fe_to_biguint(&x), fe_to_biguint(&y));
+    let sum = x + y;
+    biguint_to_fe(&sum)
+}
 
 // computes vector_{lo} * w + vector{hi}* w^{-1}
 // folding of a will be fold(a, w). folding of b will be fold(b, w^{-1})
@@ -315,10 +383,14 @@ pub fn compute_randomness(
             // some code to do "stupid" randomness, which is just
             // <revealed_element, revealed_element^2,..., revealed_element^k>
             // where k=stage_proof.len().
-            for _stage in stage_proof.iter(){
+            // EDIT: May 28. we add a hash_to_group of the sum of the stage proofs.
+            for stage in stage_proof.iter(){
                 match stage_randomness.last() {
                     Some(last_element) => {
-                        stage_randomness.push(last_element*revealed_element);
+                        stage_randomness.push(
+                            last_element*revealed_element
+                        +   hash_group_to_field(stage[0])
+                        +   hash_group_to_field(stage[1]));
                     },
                     None => {
                         stage_randomness.push(revealed_element);
@@ -417,6 +489,9 @@ pub fn generate_single_evaluation_proof(
         // current_hash = hasher.squeeze();
         // replace Poseidon with the powers of current_hash as my hash function.
         current_hash *= evaluation;
+        // EDIT: May 28. Add hash_group_to_field of L_step and R_step.
+        if step!=k {current_hash += (hash_group_to_field(L_step)
+                        + hash_group_to_field(R_step));}
         stage_randomness.push(current_hash);
         let current_hash_inv = current_hash.clone().invert().unwrap();
         // fold the vectors a, b, g
