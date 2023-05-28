@@ -8,7 +8,6 @@
 #[allow(unused_imports)]
 use ark_std::{start_timer, end_timer};
 use axiom_eth::rlp::builder;
-use binary_counting::{binary_counting_reverse, binary_counting_input};
 use halo2_base::gates::range;
 use halo2_base::halo2_proofs::plonk::Assigned;
 use halo2_base::utils::bigint_to_fe;
@@ -16,9 +15,9 @@ use halo2_proofs::plonk::Circuit;
 // use ipa_rust_simple_hash_batch::{proof_of_inclusion, single__IPA_proof, 
 //                                 test_ipa_export, generate_hasher,
 //                                 batch_IPA_proof};
-use ipa_rust_clean::{ProofOfInclusion, CompleteSingleIPAProof, 
-                    test_ipa_export, CompleteBatchIPAProof,
-                test_batch_ipa_export};
+// use ipa_rust_clean::{ProofOfInclusion, CompleteSingleIPAProof, 
+//                     test_ipa_export, CompleteBatchIPAProof,
+//                 test_batch_ipa_export};
 
 use snark_verifier::loader::halo2::IntegerInstructions;
 // use poseidon_rust::Poseidon;
