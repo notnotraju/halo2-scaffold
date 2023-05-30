@@ -107,7 +107,12 @@ use serde::{Deserialize, Serialize};
 pub struct binary_counting_input<F: ScalarField> {
     pub field_elts: Vec<AssignedValue<F>>,
 }
-
+// input is <w_1,...,w_k> (AssignedValue<F>)
+// output is <w_1^{-1}*...*w_k^{-1}, w^1*w_2^{-1}*...*w_k^{-1}, w_1*w_2^{-1}*...*w_k^{-1}, ... w_1*w_2*...*w_k>
+// k = 2, <w_1, w_2>
+// output: <w_1^{-1}*w_2^{-1}, w_1*w_2^{-1}, w_1^{-1}*w_2, w_1*w_2>
+// 00, 10, 01, 11 (i.e., reverse each string, e.g. 110000 -> 000011)
+// 0 ,  1,  2,  3
 pub fn binary_counting<F: ScalarField>(
     ctx: &mut Context<F>,
     gate: &GateChip<F>,
@@ -208,18 +213,6 @@ pub fn compute_binary_counting<F:ScalarField>(
 
 
 
-
-// #[test]
-// fn test_binary_counting() {
-//     env_logger::init();
-//     let args = Cli::parse();
-//     let mut make_public = Vec::new();
-//     let private_inputs =
-//         (0..128 as usize)
-//         .map(|x| Fr::from(x*x as u64))
-//         .collect::<Vec<_>>();
-//     run_builder_on_inputs(compute_binary_counting, cli, private_inputs);
-//     }
 
 
 

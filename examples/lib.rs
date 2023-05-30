@@ -3,7 +3,7 @@
 pub mod ipa_rust_clean;
 
 pub mod binary_counting;
-pub mod ipa_rust_simple_hash_batch;
+
 
 fn main() {
     env_logger::init();

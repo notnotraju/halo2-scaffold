@@ -1,7 +1,7 @@
 //! Example of scaffolding where function uses full `GateThreaderBuilder` instead of single `Context`
 
 mod binary_counting;
-mod ipa_rust_simple_hash_batch;
+mod ipa_rust_old;
 // use crate::binary_counting::binary_counting;
 
 
@@ -10,7 +10,7 @@ use ark_std::{start_timer, end_timer};
 use axiom_eth::rlp::builder;
 use binary_counting::{binary_counting_reverse, binary_counting_input};
 use halo2_base::utils::bigint_to_fe;
-use ipa_rust_simple_hash_batch::{proof_of_inclusion, single__IPA_proof, 
+use ipa_rust_old::{proof_of_inclusion, single__IPA_proof, 
                                 test_ipa_export, generate_hasher,
                                 batch_IPA_proof};
 

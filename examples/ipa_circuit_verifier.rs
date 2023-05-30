@@ -1,27 +1,24 @@
 //! Example of scaffolding where function uses full `GateThreaderBuilder` instead of single `Context`
 
 mod binary_counting;
-mod ipa_rust_simple_hash_batch;
-// use crate::binary_counting::binary_counting;
+use binary_counting::{binary_counting_reverse, binary_counting_input};
+
 mod ipa_rust_clean;
+use ipa_rust_clean::{CompleteSingleIPAProof, 
+    test_ipa_export, CompleteBatchIPAProof,
+    test_batch_ipa_export, hash_group_to_field};
 
 #[allow(unused_imports)]
 use ark_std::{start_timer, end_timer};
 use axiom_eth::rlp::builder;
-use binary_counting::{binary_counting_reverse, binary_counting_input};
+
 use halo2_base::gates::range;
 use halo2_base::halo2_proofs::plonk::Assigned;
 use halo2_base::utils::bigint_to_fe;
 use halo2_base::utils::biguint_to_fe;
 use halo2_base::utils::fe_to_biguint;
 use halo2_proofs::plonk::Circuit;
-use ipa_rust_clean::hash_group_to_field;
-// use ipa_rust_simple_hash_batch::{proof_of_inclusion, single__IPA_proof, 
-//                                 test_ipa_export, generate_hasher,
-//                                 batch_IPA_proof};
-use ipa_rust_clean::{ProofOfInclusion, CompleteSingleIPAProof, 
-                    test_ipa_export, CompleteBatchIPAProof,
-                test_batch_ipa_export};
+
 
 use snark_verifier::loader::halo2::IntegerInstructions;
 // use poseidon_rust::Poseidon;
@@ -84,6 +81,8 @@ use poseidon::PoseidonChip;
 // grumpkin and group
 // use grumpkin::{G1, G1Affine, Fq, Fr};
 
+// structure for MSM circuit parameters.
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct MSMCircuitParams {
     strategy: FpStrategy,
@@ -97,15 +96,23 @@ pub struct MSMCircuitParams {
     batch_size: usize,
     window_bits: usize,
 }
-// in this code, these global constants are not necessary.
-// they are used to uniformize the potential application of Poseidon
-// for Fiat-Shamir.
+
+// constants for Poseidon. we don't use these in this circuit: I
+// was unable to get PoseidonChip to match with a rust version of Poseidon,
+// so I couldn't generate proofs to test the circuit.
+// In particular, native rust implementation (in Axiom's repo) seems inconsistent
+// with their PoseidonChip implementation
 const T: usize = 3;
 const RATE: usize = 2;
 const R_F: usize = 8;
 const R_P: usize = 33;
 
 
+// struct containing all of the information that a verifier
+// needs to check a single IPA proof. in general, our load
+// method will load a proof (in whatever format) into 
+// CircuitCompleteSingleProof. (note that the information here 
+// is all on a circuit level.)
 #[derive(Clone, Debug)]
 pub struct CircuitCompleteSingleProof {
     pub commitment: EcPoint<Fr, CRTInteger<Fr>>,
@@ -116,15 +123,19 @@ pub struct CircuitCompleteSingleProof {
     pub L: Vec<EcPoint<Fr, CRTInteger<Fr>>>,
     pub R: Vec<EcPoint<Fr, CRTInteger<Fr>>>,
     pub final_a: AssignedValue<Fr>,
-    pub k: usize,
+    pub k: usize, // number, such that 2^k is the degree of the polynomial we are commiting.
+                  // equivalently, the number of steps in the proof.
 }
+
+// load a CompleteSingleIPAProof, per my rust implementation, 
+// into a CircuitCompleteSingleProof.
 
 pub fn load_complete_single_IPA_proof(
     builder: &mut GateThreadBuilder<Fr>,
     gate: &GateChip<Fr>,
     range: &RangeChip<Fr>,
     params: &MSMCircuitParams,
-    single_proof: CompleteSingleIPAProof,
+    single_proof: &CompleteSingleIPAProof, // an IPA proof, generated in rust.
     make_public: &mut Vec<AssignedValue<Fr>>,
 ) -> CircuitCompleteSingleProof {
     let fp_chip = FpChip::<Fr>::new(range, params.limb_bits, params.num_limbs);
@@ -175,12 +186,30 @@ pub fn load_complete_single_IPA_proof(
         k
     }
 }
-// 
+
+// "hash" a point p on the curve to an F_r point.
+// we simply take the p.x and p.y points "mod r"
+// (which is what is meant by p.x.native, under the CRTInteger<Fr>
+// abstraction), and add them. 
+pub fn hash_group_to_field_circuit(
+    // builder: &mut GateThreadBuilder<Fr>,
+    ctx: &mut Context<Fr>,
+    gate: &GateChip<Fr>,
+    p: EcPoint<Fr, CRTInteger<Fr>>
+  )->AssignedValue<Fr>{
+    gate.add(ctx, p.x.native, p.y.native)    
+  }
+
+
+// given some part of the proof, complete the "stage_randomness"
+// (this is where the verifier simulates the Fiat-Shamir.)
+// in particular, the output will be of the form:
+// (<w_k, ..., w_1>, <w_k^{-1}, ..., w_1^{-1}>), with constraints
+// forcing w_i * w_i^{-1} = 1.
+// as always, the numbering corresponds to the stages.
 pub fn compute_stage_randomness_single_proof(
     builder: &mut GateThreadBuilder<Fr>,
     gate: &GateChip<Fr>,
-//    range: &RangeChip<Fr>,
-    params: &MSMCircuitParams,
     z: AssignedValue<Fr>,
     revealed_evaluation: AssignedValue<Fr>,
     L: Vec<EcPoint<Fr, CRTInteger<Fr>>>,
@@ -188,21 +217,28 @@ pub fn compute_stage_randomness_single_proof(
     k: usize,
 )->(Vec<AssignedValue<Fr>>, Vec<AssignedValue<Fr>>){
 
-    // let fp_chip = FpChip::<Fr>::new(range, params.limb_bits, params.num_limbs);
-    // let ecc_chip = EccChip::new(&fp_chip);
     let mut stage_randomness = Vec::new();
     let mut stage_randomness_inv = Vec::new();
     let ctx = builder.main(0);
+
+    // ideally, this will use Poseidon at some point. below I have
+    // a bit of code setting up the PoseidonChip.
+    // let mut poseidon = PoseidonChip::<Fr, T, RATE>::new(ctx, R_F, R_P).unwrap();
+    // poseidon.update(&[revealed_evaluation]);
     
+    // INSTEAD, our randomness is given inductively by the formula below.
+    // stage_randomness[0]=revealed evaluation.
+    // stage_randomness[i] = 
+    //      stage_randomness[i-1] * revealed_evaluation + hash(L[i]) + hash(R[i])
     stage_randomness.push(revealed_evaluation);
-    
     let mut r = revealed_evaluation.value();
     for i in 1..k{
-        let power_of_revealed_evaluation = gate.mul(ctx, 
+        
+        let scale_old_randomness = gate.mul(ctx, 
             revealed_evaluation, stage_randomness[i-1]);
         let L_hash = hash_group_to_field_circuit(ctx, gate, L[i].clone());
         let R_hash = hash_group_to_field_circuit(ctx, gate, R[i].clone());
-        let preliminary_randomness = gate.add(ctx, power_of_revealed_evaluation, L_hash);
+        let preliminary_randomness = gate.add(ctx, scale_old_randomness, L_hash);
         let new_randomness = gate.add(ctx, preliminary_randomness, R_hash);
         stage_randomness.push(new_randomness);
     }
@@ -216,8 +252,10 @@ pub fn compute_stage_randomness_single_proof(
                                 Constant(Fr::one())], [0]);
     }
     (stage_randomness, stage_randomness_inv)
-
 }
+
+// compute the "batching" randomness, i.e., given a bunch of proofs,
+// compute [r,t], where we will weight the polynomials by r and evaluate at t.
 // m is len(vec_stage_randomness), i.e., the number of proofs being batched.
 pub fn compute_final_batching_randomness(
     builder: &mut GateThreadBuilder<Fr>,
@@ -237,8 +275,8 @@ pub fn compute_final_batching_randomness(
     let t = gate.mul(ctx, compute_r[m-1], compute_r[m-1]);
     [compute_r[m-1], t]
 }
-// given stage_randomness = (w_k, w_{k-1},...,w_1)
-// and z\in F_r, compute the following:
+
+// given stage_randomness = (w_k, w_{k-1},...,w_1) and z\in F_r, compute the following:
 // \Prod_{i=1}^k (z^{2^{i-1}} * w_i + w_i^{-1})
 pub fn evaluate_folded_product_poly(
     ctx: &mut Context<Fr>,
@@ -247,7 +285,6 @@ pub fn evaluate_folded_product_poly(
     stage_randomness: Vec<AssignedValue<Fr>>,
     stage_randomness_inv: Vec<AssignedValue<Fr>>,
 )->AssignedValue<Fr>{
-    
     // two_pow_of_z = [z^{2^{k-1}}, z^{2^{k-2}}, ..., z^{2^0}}]
     let k = stage_randomness.len();
     let mut two_pow_of_z: Vec<AssignedValue<Fr>> = Vec::new();
@@ -276,11 +313,10 @@ pub fn evaluate_folded_product_poly(
     }
     partial_evaluation[k-1]
 }
-// currently, the input is of type CompleteSingleIPAProof
-// I wonder if this is bad, because the length is not specified by some global constant.
-// the vectorized inputs are: g_init, stage_proofs, and then
-// in batching_helper info, the value of stage_randomness.
 
+
+
+// verify a single IPA proof. Input is of type CompleteSingleIPAProof.
 // I make z and the revealed_evaluation public.
 // (I don't know how to make the commitment public!!)
 fn verify_single_IPA_proof(
@@ -307,7 +343,7 @@ fn verify_single_IPA_proof(
 
     // load the various inputs from single_proof.
     let complete_assigned_proof = 
-        load_complete_single_IPA_proof(builder, &gate, &range, &params, single_proof, make_public);
+        load_complete_single_IPA_proof(builder, &gate, &range, &params, &single_proof, make_public);
     
     // introduce variables for the inputs.
     let ctx = builder.main(0);
@@ -316,7 +352,6 @@ fn verify_single_IPA_proof(
     let g_init = complete_assigned_proof.g_init;
     let U = complete_assigned_proof.U;
     let revealed_evaluation = complete_assigned_proof.revealed_evaluation;
-    // compute the stage_randomness.
     
     // load L, R, and final_a.
     let L = complete_assigned_proof.L;
@@ -330,7 +365,6 @@ fn verify_single_IPA_proof(
         compute_stage_randomness_single_proof(
             builder,
             &gate,
-            &params,
             z,
             revealed_evaluation,
             L.clone(),
@@ -339,12 +373,6 @@ fn verify_single_IPA_proof(
     let ctx = builder.main(0);
     
     println!("we have loaded all of the inputs!");
-    // build the poseidon chip.
-    // let mut poseidon = PoseidonChip::<Fr, T, RATE>::new(ctx, R_F, R_P).unwrap();
-    // regenerate the randomness from the proof. KILLED POSEIDON
-    // for testing purposes
-    // note that I'm doing a particularly dumb version of this atm.
-    // poseidon.update(&[revealed_evaluation]);
     
     let mut stage_randomness_sq: Vec<AssignedValue<Fr>> = Vec::new();
     let mut stage_randomness_inv_sq: Vec<AssignedValue<Fr>> = Vec::new();
@@ -400,9 +428,7 @@ fn verify_single_IPA_proof(
             window_bits,
             0);
 
-    // println!("Circuit managed to compute L_folded! The value is {:?}, {:?}", bigint_to_fe::<Fr>(&L_folded.x.value), bigint_to_fe::<Fr>(&L_folded.y.value)  );
-    // println!("Circuit managed to compute R_folded! The value is {:?}, {:?}", bigint_to_fe::<Fr>(&R_folded.x.value), bigint_to_fe::<Fr>(&R_folded.y.value)  );
-    let ctx = builder.main(0);
+    // let ctx = builder.main(0);
     let G_0 = ecc_chip.
         variable_base_msm_in::<G1Affine>(
             builder, 
@@ -416,7 +442,7 @@ fn verify_single_IPA_proof(
 
     let L_folded_plus_R_folded = ecc_chip.add_unequal(ctx, &L_folded, &R_folded, true);
     let first_Q = ecc_chip.add_unequal(ctx, &L_folded_plus_R_folded, &P_Prime, true);
-    
+    // Ub_0
     let U_x_b_0 = ecc_chip.scalar_mult(ctx,
                             &U, 
                             vec![b_0],
@@ -435,12 +461,19 @@ fn verify_single_IPA_proof(
                             window_bits);
     // println!("Circuit computes first_Q: {:?}, {:?}", bigint_to_fe::<Fr>(&first_Q.x.value), bigint_to_fe::<Fr>(&first_Q.y.value)  );
     // println!("Circuit computes second_Q: {:?}, {:?}", bigint_to_fe::<Fr>(&second_Q.x.value), bigint_to_fe::<Fr>(&second_Q.y.value)  );
+    // for sanity, print out the differences between the coordinates.
     println!("Difference between the coordinates: {:?}, {:?}",
         &first_Q.x.value - &second_Q.x.value, 
         &first_Q.y.value - &second_Q.y.value);
+    // assert that the two points are equal. (Q: should I use an IsEqual gate instead?)
+    let out = ecc_chip.is_equal(ctx, &first_Q, &second_Q);
+    make_public.push(out);
+    // not sure if I need/want this!
     ecc_chip.assert_equal(ctx, &first_Q, &second_Q);
 }
 
+// structure containing everything a verifier needs to verifier
+// a batch proof.
 pub struct CircuitCompleteBatchProof {
     // the proofs of the individual claims
     pub vec_commitment: Vec<EcPoint<Fr, CRTInteger<Fr>>>,
@@ -559,9 +592,7 @@ pub fn load_complete_batch_IPA_proof(
     }
 }
 
-
-
-
+// batch verification. input is a CircuitCompleteBatchProof.
 pub fn verify_batch_IPA_proof(
     builder: &mut GateThreadBuilder<Fr>,
     // params: &MSMCircuitParams,
@@ -579,7 +610,7 @@ pub fn verify_batch_IPA_proof(
     let gate = GateChip::<Fr>::default();
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
-    let ecc_chip = EccChip::new(&fp_chip);
+    // let ecc_chip = EccChip::new(&fp_chip);
 
     // obtain context.
     let ctx = builder.main(0);
@@ -607,6 +638,7 @@ pub fn verify_batch_IPA_proof(
     let final_a_0 = circuit_batch_ipa_proof.final_a_0;
     let k = circuit_batch_ipa_proof.k;
     let m = circuit_batch_ipa_proof.m;
+
     // compute the stage_randomness at each stage.
     let mut vec_stage_randomness: Vec<Vec<AssignedValue<Fr>>> = Vec::new();
     let mut vec_stage_randomness_inv: Vec<Vec<AssignedValue<Fr>>> = Vec::new();
@@ -614,7 +646,7 @@ pub fn verify_batch_IPA_proof(
 
     for i in 0..m {
         let (stage_randomness, stage_randomness_inv) = 
-            compute_stage_randomness_single_proof(builder, &gate, &params, vec_z[i], vec_revealed_evaluation[i], vec_L[i].clone(), vec_R[i].clone(), k);
+            compute_stage_randomness_single_proof(builder, &gate, vec_z[i], vec_revealed_evaluation[i], vec_L[i].clone(), vec_R[i].clone(), k);
         vec_stage_randomness.push(stage_randomness);
         vec_stage_randomness_inv.push(stage_randomness_inv);
     }
@@ -644,6 +676,7 @@ pub fn verify_batch_IPA_proof(
             gate.mul_add(ctx, pow_of_r[i], bare_stage_i_evaluation, partial_evaluations[i])
         );
     }
+
     let final_claimed_evaluation = partial_evaluations[m].clone();
     println!("final_claimed_evaluation: {:?}", final_claimed_evaluation.value());
     let final_proof = CompleteSingleIPAProof{
@@ -654,18 +687,12 @@ pub fn verify_batch_IPA_proof(
         U: complete_batch_ipa_proof.U,
     };
     // now just have to verify the single proof, with respect to this claimed evaluation.
+    // NOTE: there is an ``out'' variable that has been made_public. we
+    // should check that is 1.
     verify_single_IPA_proof(builder, final_proof, make_public);
     
   }
 
-  pub fn hash_group_to_field_circuit(
-    // builder: &mut GateThreadBuilder<Fr>,
-    ctx: &mut Context<Fr>,
-    gate: &GateChip<Fr>,
-    p: EcPoint<Fr, CRTInteger<Fr>>
-  )->AssignedValue<Fr>{
-    gate.add(ctx, p.x.native, p.y.native)    
-  }
 
 fn main() {
     // std::env::set_var("RUST_BACKTRACE", "1");
@@ -679,128 +706,15 @@ fn main() {
     .unwrap();
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
     std::env::set_var("DEGREE", 4.to_string());
-    let private_inputs = test_ipa_export(3);
+    let private_inputs = test_ipa_export(8);
     let random_group_element = G1Affine::random(&mut OsRng);
-    let batch_private_inputs = test_batch_ipa_export(2,30);
+    let batch_private_inputs = test_batch_ipa_export(2,10);
     // run_builder_on_inputs(verify_single_IPA_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
-    //run_builder_on_inputs(verify_single_IPA_proof, args, private_inputs);
-    run_builder_on_inputs(verify_batch_IPA_proof, args, batch_private_inputs);
+    run_builder_on_inputs(verify_single_IPA_proof, args, private_inputs);
+    // run_builder_on_inputs(verify_batch_IPA_proof, args, batch_private_inputs);
     // run_builder_on_inputs(group_to_field, args, random_group_element);
 }
 
 
 
-
-pub fn test_poseidon(builder: &mut GateThreadBuilder<Fr>,
-    x: Fr,
-    make_public: &mut Vec<AssignedValue<Fr>>){
-        let ctx = builder.main(0);
-        let gate = GateChip::<Fr>::default();
-        // const T: usize = 3;
-        // const RATE: usize = 2;
-        // const R_F: usize = 8;
-        // const R_P: usize = 33;
-        //let mut hasher = Poseidon::<Fr, T, RATE>::new(R_F, R_P);
-        let mut hasher = Poseidon::<Fr, Fr, T, RATE>::new::<R_F, R_P, 0>(&NativeLoader);
-        let mut poseidon = PoseidonChip::<Fr, T, RATE>::new(ctx, R_F, R_P).unwrap();
-        hasher.update(&[x]);
-        let rust_output = hasher.squeeze();
-        
-        let x = ctx.load_witness(x);
-        poseidon.update(&[x]);
-        let circuit_output = poseidon.squeeze(ctx, &gate).unwrap();
-        println!("The input is {:?}", x.value());
-        println!("According to PoseidonChip, the value of output is {:?}", circuit_output.value());
-        println!("According to rust, the value of the output is {:?}", rust_output);
-    }
-
-
-pub struct test_mul_input{
-    points: [G1Affine;256],
-    scalars: [Fr;256],
-}
-
-pub fn load_EC_point(
-    builder: &mut GateThreadBuilder<Fr>,
-    input: test_mul_input,
-    make_public: &mut Vec<AssignedValue<Fr>>,
-){
-    let path = "examples/ipa_msm_circuit.config";
-        let params: MSMCircuitParams = serde_json::from_reader(
-            File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
-        )
-        .unwrap();
-        // set up chips.
-        std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
-        println!("lookup bits: {}", params.lookup_bits);
-        let gate = GateChip::<Fr>::default();
-        let range = RangeChip::<Fr>::default(params.lookup_bits);
-        let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
-        let ecc_chip = EccChip::new(&fp_chip);
-        let ctx = builder.main(0);
-        
-        let points = input.points;
-        let scalars = input.scalars;
-        let mut Hpoints = Vec::new();
-        let mut Hscalars = Vec::new();
-        for i in 0..256{
-            Hscalars.push(vec![ctx.load_witness(scalars[i])]);
-            Hpoints.push(ecc_chip.load_private(ctx, (points[i].x, points[i].y)));
-        }
-        let result = ecc_chip.variable_base_msm_in::<G1Affine>(
-            builder, 
-            &Hpoints,
-            Hscalars,
-            Fr::NUM_BITS as usize,
-            4,
-            0);
-        
-        println!("Hello world!!");
-        // println!("The value of the result is {:?}", result.x());
-}
-
-// #[derive(Clone, Debug)]
-// pub struct AssignedProofOfInclusion{
-//     pub revealed_evaluation: AssignedValue<Fr>,
-//     L: Vec<EcPoint<Fr, CRTInteger<Fr>>>,
-//     R: Vec<EcPoint<Fr, CRTInteger<Fr>>>,
-//     final_a: AssignedValue<Fr>,
-// }
-
-
-// pub fn load_proof_of_inclusion(
-//     builder: &mut GateThreadBuilder<Fr>,
-//     proof: &ProofOfInclusion,
-//     make_public: &mut Vec<AssignedValue<Fr>>
-// ) -> AssignedProofOfInclusion{
-//     let path = "examples/msm_circuit.config";
-//     let params: MSMCircuitParams = serde_json::from_reader(
-//         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
-//     )
-//     .unwrap();
-
-//     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
-//     let gate = GateChip::<Fr>::default();
-//     let range = RangeChip::<Fr>::default(params.lookup_bits);
-//     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
-//     let ecc_chip = EccChip::new(&fp_chip);
-
-//     let ctx = builder.main(0);
-//     let revealed_evaluation = ctx.load_witness(proof.revealed_evaluation);
-    
-//     let stage_proof = proof.stage_proof.
-//         iter().
-//         map(|proof| [ecc_chip.load_private(ctx, (proof[0].x, proof[0].y)), ecc_chip.load_private(ctx, (proof[1].x, proof[1].y))])
-//         .collect::<Vec<_>>();
-//     // process L, and R.
-
-//     let L = stage_proof.iter()
-//                         .map(|proof| proof[0].clone())
-//                         .collect::<Vec<_>>();
-//     let R = stage_proof.iter()
-//                         .map(|proof| proof[1].clone())
-//                         .collect::<Vec<_>>();
-//     let final_a = ctx.load_witness(proof.final_a);
-//     AssignedProofOfInclusion {revealed_evaluation, L, R, final_a}
-// }
