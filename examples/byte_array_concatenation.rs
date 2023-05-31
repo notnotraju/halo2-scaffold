@@ -175,7 +175,7 @@ pub fn byte_concatenation<const n: usize>(
     // the bottom is *fixed* for fixed n, lengths. (therefore, we do not need to write extra circuit
     // checks for it, we can simply declare it.)
     let weights = weights.iter()
-        .map(|w| ctx.load_constant(cFr::from(*w as u64)))
+        .map(|w| ctx.load_constant(Fr::from(*w as u64)))
         .collect::<Vec<_>>();
     // compute f_i:
     let mut f: [Fr; n] = [Fr::zero(); n];
@@ -196,7 +196,7 @@ pub fn byte_concatenation<const n: usize>(
     let s_as_field = 
         bytes_to_field(ctx, &gate, &range, s, n);
     
-    let compute_concatenated_field_element: Vec<AssignedValue<Fr>> = vec![];
+    let mut compute_concatenated_field_element: Vec<AssignedValue<Fr>> = vec![];
     compute_concatenated_field_element.push(gate.mul(ctx, a_field_elements[0], weights[0]));
     for i in 1..n{
         let next_computation = 
@@ -207,10 +207,9 @@ pub fn byte_concatenation<const n: usize>(
         compute_concatenated_field_element.push(next_computation);
     }
     let concatenated_field_element = compute_concatenated_field_element[n-1];
-    assert_eq!(concatenated_field_element, s_as_field);
+    // assert_eq!(concatenated_field_element, s_as_field);
     let out = gate.is_equal(ctx, s_as_field, concatenated_field_element);
-    
-sdf
+   
 }
 
 
