@@ -184,7 +184,7 @@ pub fn byte_concatenation<const n: usize>(
         bytes_to_field(ctx, &gate, &range, s, n);
     let byte_arrays_as_single_field_element: Vec<AssignedValue<Fr>> = vec![];
     // byte_arrays_as_single_field_elements.push(ctx.load_constant(Fr::zero()));
-
+    // TODO!
     unimplemented!()
 }
 
