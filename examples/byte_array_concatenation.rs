@@ -100,6 +100,10 @@ pub struct FixedByteArraysInput<const n: usize>{
     pub a: [[Fr; n];n], // list of n byte strings, each of length n.
     pub lengths: Lengths::<n>,
 }
+
+
+// given a vector of bytes, and a length l, compute the corresponding field element.
+// do range checks on all of the elements of bytes, to make sure they are in [0, 256)
 pub fn bytes_to_field(
     ctx: &mut Context<Fr>,
     gate: &GateChip<Fr>,
@@ -123,6 +127,7 @@ pub fn bytes_to_field(
     compute_field_element[l]
 }
 
+// helper function to feed into run_builder_on_inputs.
 pub fn compute_bytes_to_field(
     builder: &mut GateThreadBuilder<Fr>,
     input: (Vec<Fr>, usize),
@@ -141,8 +146,11 @@ pub fn compute_bytes_to_field(
     make_public.push(field_element);
 }
 
-
- 
+// given an input of type FixedByteArraysInput::<n> (where n is the total length),
+// i.e. a byte array s, and a list of byte arrays a_i, and a list of their sizes, check the concatenation
+// condition: s == a_1 || ... || a_n.
+// note: the list of their sizes is not in the circuit; it is pure rust, and this will be used to do fixed "shape"
+// membership verification.
 pub fn byte_concatenation<const n: usize>(
     builder: &mut GateThreadBuilder<Fr>,
     input: FixedByteArraysInput<n>,
@@ -154,20 +162,25 @@ pub fn byte_concatenation<const n: usize>(
         var("LOOKUP_BITS").unwrap_or_else(|_| panic!("LOOKUP_BITS not set")).parse().unwrap();
     let range: RangeChip<Fr> = RangeChip::default(lookup_bits);
     let s: Vec<AssignedValue<Fr>> = input.s.iter().map(|s| ctx.load_witness(*s)).collect();
-    // the total number will be \sum f_i * w[i].
-    // this is under the assumption that n<=31, so that every s 
-    // fully fits into a field element.
+    // for each a_i, let f_i be the corresponding field element. 
+    // we will compute weights w_i such that the concatenation has value: 
+    // \sum f_i * w[i] (under the assumption that every element of a_i is a byte)
+    // here we crucially use that the field has more than 31 bytes!
     let mut weights: [u32; n] = [0; n];
     weights[n-1] = 1;
     for i in (0..(n-1)).rev(){
         weights[i] = 2u32.pow(input.lengths.lens[i] as u32)
                     * weights[i+1];
     }
+    // the bottom is *fixed* for fixed n, lengths. (therefore, we do not need to write extra circuit
+    // checks for it, we can simply declare it.)
+    let weights = weights.iter()
+        .map(|w| ctx.load_constant(cFr::from(*w as u64)))
+        .collect::<Vec<_>>();
     // compute f_i:
-
     let mut f: [Fr; n] = [Fr::zero(); n];
     // turn inputs.a into a Vec<Vec<AssignedValue<Fr>>> in the obvious way.
-    // do range checks on all of the bytes, to make sure they are the right 
+    // implicitly do range checks on all of the bytes, to make sure they are in [0, 256) 
     let mut a = input.a.iter()
                     .map(|a| a.iter()
                         .map(|a_i|
@@ -182,10 +195,22 @@ pub fn byte_concatenation<const n: usize>(
     let s = input.s.iter().map(|s| ctx.load_witness(*s)).collect::<Vec<_>>();
     let s_as_field = 
         bytes_to_field(ctx, &gate, &range, s, n);
-    let byte_arrays_as_single_field_element: Vec<AssignedValue<Fr>> = vec![];
-    // byte_arrays_as_single_field_elements.push(ctx.load_constant(Fr::zero()));
-
-    unimplemented!()
+    
+    let compute_concatenated_field_element: Vec<AssignedValue<Fr>> = vec![];
+    compute_concatenated_field_element.push(gate.mul(ctx, a_field_elements[0], weights[0]));
+    for i in 1..n{
+        let next_computation = 
+            gate.mul_add(ctx,
+                 weights[i],
+                 a_field_elements[i],
+                 compute_concatenated_field_element[i-1]);
+        compute_concatenated_field_element.push(next_computation);
+    }
+    let concatenated_field_element = compute_concatenated_field_element[n-1];
+    assert_eq!(concatenated_field_element, s_as_field);
+    let out = gate.is_equal(ctx, s_as_field, concatenated_field_element);
+    
+sdf
 }
 
 
