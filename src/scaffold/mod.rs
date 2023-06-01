@@ -9,6 +9,7 @@ use axiom_eth::util::{
 use halo2_base::{
     gates::builder::{
         CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
+        RangeWithInstanceCircuitBuilder, RangeWithInstanceConfig
     },
     halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner},

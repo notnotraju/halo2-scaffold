@@ -708,11 +708,11 @@ fn main() {
     std::env::set_var("DEGREE", 4.to_string());
     let private_inputs = test_ipa_export(8);
     let random_group_element = G1Affine::random(&mut OsRng);
-    let batch_private_inputs = test_batch_ipa_export(2,10);
+    let batch_private_inputs = test_batch_ipa_export(8,20);
     // run_builder_on_inputs(verify_single_IPA_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
-    run_builder_on_inputs(verify_single_IPA_proof, args, private_inputs);
-    // run_builder_on_inputs(verify_batch_IPA_proof, args, batch_private_inputs);
+    // run_builder_on_inputs(verify_single_IPA_proof, args, private_inputs);
+    run_builder_on_inputs(verify_batch_IPA_proof, args, batch_private_inputs);
     // run_builder_on_inputs(group_to_field, args, random_group_element);
 }
 
