@@ -816,7 +816,7 @@ pub fn test_ipa_export(k: usize)-> CompleteSingleIPAProof {
     single_proof
 }
 
-
+// what I pass to test my batch circuit verifier.
 pub fn test_batch_ipa_export(k: usize, batch_size: usize)-> CompleteBatchIPAProof {
 
     let n = pow(2, k);

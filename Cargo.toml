@@ -1,23 +1,24 @@
-[package]
-name = "halo2-scaffold"
-version = "0.2.0"
-edition = "2021"
+    [package]
+    name = "halo2-scaffold"
+    version = "0.2.0"
+    edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+    # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-rand = "0.8"
-ark-std = { version = "0.3.0", features = ["print-trace"] }
-serde = { version = "1.0", default-features = false, features = ["derive"] }
-serde_json = "1.0"
-log = "0.4"
-env_logger = "0.10"
-clap = { version = "4.1", features = ["derive"] }
-clap-num = "1.0.2"
+    [dependencies]
+    rand = "0.8"
+    ark-std = { version = "0.3.0", features = ["print-trace"] }
+    serde = { version = "1.0", default-features = false, features = ["derive"] }
+    serde_json = "1.0"
+    log = "0.4"
+    env_logger = "0.10"
+    clap = { version = "4.1", features = ["derive"] }
+    clap-num = "1.0.2"
 
-# halo2
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_02_02" }
+    # halo2
+    halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_02_02" }
 
+<<<<<<< HEAD
 # Axiom's helper API with basic functions 
 halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
 # halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
@@ -25,63 +26,72 @@ halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axio
 # Axiom poseidon chip (adapted from Scroll)
 poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
 # poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
+=======
+    # Axiom's helper API with basic functions 
+    halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
+    # halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
 
-# Axiom fork of halo2, which we add to use their native poseidon implementation.
-poseidon-rust = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "poseidon" }
-# Axiom snark-verifier, which we use to load a native poseidon implementation
-# which is compatible with their PoseidonChip implementation. 
-snark-verifier = {git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "axiom-dev-0406", default-features = false, features = ["loader_halo2"]}
+    # Axiom poseidon chip (adapted from Scroll)
+    poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
+    # poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
+>>>>>>> 13f6cc10aab9ca7b965600f68e8c5d0a07781578
 
-# Axiom Evm wrapper 
-axiom-eth = { git = "https://github.com/axiom-crypto/axiom-eth.git", branch = "axiom-dev-0406", default-features = false, features = ["halo2-axiom", "aggregation", "evm", "clap"] }
-snark-verifier-sdk = { git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "axiom-dev-0406", default-features = false, features = ["loader_halo2"] }
+    # Axiom fork of halo2, which we add to use their native poseidon implementation.
+    poseidon-rust = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "poseidon" }
+    # Axiom snark-verifier, which we use to load a native poseidon implementation
+    # which is compatible with their PoseidonChip implementation. 
+    snark-verifier = {git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "axiom-dev-0406", default-features = false, features = ["loader_halo2"]}
 
-# Axiom ECC chip
-halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
-# halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
-# arithmetic
-group = "0.13.0"
-ff = "0.12.0"
+    # Axiom Evm wrapper 
+    axiom-eth = { git = "https://github.com/axiom-crypto/axiom-eth.git", branch = "axiom-dev-0406", default-features = false, features = ["halo2-axiom", "aggregation", "evm", "clap"] }
+    snark-verifier-sdk = { git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "axiom-dev-0406", default-features = false, features = ["loader_halo2"] }
 
-# Grumpkin
-grumpkin = { git = "https://github.com/jules/grumpkin"}
+    # Axiom ECC chip
+    halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
+    # halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
+    # arithmetic
+    group = "0.13.0"
+    ff = "0.12.0"
+
+    # Grumpkin
+    grumpkin = { git = "https://github.com/jules/grumpkin"}
 
 
-# num_bigint = "0.4.3"
-num-bigint = "0.4.2"
-num-traits = "0.2.14"
+    # num_bigint = "0.4.3"
+    num-bigint = "0.4.2"
+    num-traits = "0.2.14"
 
 
-[dev-dependencies]
-test-log = "0.2.11"
+    [dev-dependencies]
+    test-log = "0.2.11"
 
-[features]
-default = []
+    [features]
+    default = []
 
-# Dev / testing mode. We make opt-level = 3 to improve proving times (otherwise it is really slow)
-[profile.dev]
-opt-level = 3
-debug = 1 # change to 0 or 2 for more or less debug info
-overflow-checks = true # default
-incremental = true # default
+    # Dev / testing mode. We make opt-level = 3 to improve proving times (otherwise it is really slow)
+    [profile.dev]
+    opt-level = 3
+    debug = 1 # change to 0 or 2 for more or less debug info
+    overflow-checks = true # default
+    incremental = true # default
 
-# Local "release" mode, more optimized than dev but faster to compile than release
-[profile.local]
-inherits = "dev"
-opt-level = 3
-# Set this to 1 or 2 to get more useful backtraces
-debug = 1
-debug-assertions = false
-panic = 'unwind'
-# better recompile times
-incremental = true
-lto = "thin"
-codegen-units = 16
+    # Local "release" mode, more optimized than dev but faster to compile than release
+    [profile.local]
+    inherits = "dev"
+    opt-level = 3
+    # Set this to 1 or 2 to get more useful backtraces
+    debug = 1
+    debug-assertions = false
+    panic = 'unwind'
+    # better recompile times
+    incremental = true
+    lto = "thin"
+    codegen-units = 16
 
-[profile.release]
-opt-level = 3
-debug = false
-debug-assertions = false
-lto = "fat"
-panic = "abort"
-incremental = false
+    [profile.release]
+    opt-level = 3
+    debug = false
+    debug-assertions = false
+    lto = "fat"
+    panic = "abort"
+    incremental = false
