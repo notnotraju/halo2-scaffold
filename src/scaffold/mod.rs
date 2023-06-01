@@ -32,7 +32,6 @@ use halo2_base::{
 use serde::de::DeserializeOwned;
 use snark_verifier_sdk::{
     halo2::{
-        aggregation::{RangeWithInstanceCircuitBuilder, RangeWithInstanceConfig},
         gen_snark_shplonk, read_snark, PoseidonTranscript,
     },
     read_pk, CircuitExt, NativeLoader,
