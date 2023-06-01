@@ -19,12 +19,12 @@ clap-num = "1.0.2"
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_02_02" }
 
 # Axiom's helper API with basic functions 
-# halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
-halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
+halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
+# halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
 
 # Axiom poseidon chip (adapted from Scroll)
-# poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
-poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
+poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
+# poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
 
 # Axiom fork of halo2, which we add to use their native poseidon implementation.
 poseidon-rust = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "poseidon" }
@@ -37,8 +37,8 @@ axiom-eth = { git = "https://github.com/axiom-crypto/axiom-eth.git", branch = "a
 snark-verifier-sdk = { git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "axiom-dev-0406", default-features = false, features = ["loader_halo2"] }
 
 # Axiom ECC chip
-# halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
-halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
+halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "axiom-dev-0406" }
+# halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
 # arithmetic
 group = "0.13.0"
 ff = "0.12.0"
