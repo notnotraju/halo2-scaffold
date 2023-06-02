@@ -47,7 +47,7 @@ snark-verifier-sdk = { git = "https://github.com/axiom-crypto/snark-verifier.git
     ff = "0.12.0"
 
     # Grumpkin
-    grumpkin = { git = "https://github.com/jules/grumpkin"}
+    # grumpkin = { git = "https://github.com/jules/grumpkin"}
 
 
     # num_bigint = "0.4.3"
