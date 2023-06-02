@@ -1,12 +1,7 @@
 // We still use Poseidon, but it is
 // more of a fig leaf.
 
-//use std::sync::Arc;
-
-// use ark_std::{start_timer, end_timer};
-//use halo2::arithmetic::Curve;
 use poseidon_rust::Poseidon;
-// use halo2::primitives/poseidon::{Poseidon, PoseidonParameters};
 use ff::{Field, PrimeField};
 use halo2_base::{
 
@@ -23,9 +18,12 @@ use halo2_base::{
     //    bigint_to_fe,
     }
 };
+
+use num_traits::pow;
+
 // use rand::thread_rng;
 // use halo2_proofs::halo2curves::CurveAffine;
-use num_traits::pow;
+
 // use rand::{rngs::OsRng, thread_rng};
 // use serde::{Deserialize, Serialize};
 // use std::{
@@ -33,20 +31,7 @@ use num_traits::pow;
 //     io::{BufRead, BufReader},
 // };
 
-// test 2-primary root of unity stuff.
-// seems that root_of_unity() has order 2^{28}
-// to compute lagrange basis for 2^n, we need the "barycentric formula"
-#[test]
-fn compute_2_primary_root_of_unity(){
-    let base = Fr::root_of_unity();
-    let mut i=0;
-    let mut power = base;
-    while power != Fr::one() {
-        power = power.square();
-        i+=1;
-    }
-    println!("i is {}", i);
-}
+
 // order is 2^{28}
 pub fn compute_2_k_root(k: usize, log_order: usize) -> Fr {
     let base = Fr::root_of_unity();
@@ -281,7 +266,8 @@ pub fn u64_to_bin_vec(n: u64, l: u64)->Vec<Fr>{
 // where w_j is the *k-j*th element of stage_randomness.
 // this product goes from j=1 to j=k?
 
-// TODO: rename?
+// TODO: rename? The reason is that this pattern comes up at other
+// in the code.
 pub fn compute_b_fin_poly(z: &Fr, stage_randomness: &[Fr])-> Fr{
     let k = stage_randomness.len();
     let mut two_primary_powers_of_z = vec![*z];
@@ -847,7 +833,20 @@ pub fn test_batch_ipa_export(k: usize, batch_size: usize)-> CompleteBatchIPAProo
     }
 }
 
-
+// test 2-primary root of unity stuff.
+// seems that root_of_unity() has order 2^{28}
+// to compute lagrange basis for 2^n, we need the "barycentric formula"
+#[test]
+fn compute_2_primary_root_of_unity(){
+    let base = Fr::root_of_unity();
+    let mut i=0;
+    let mut power = base;
+    while power != Fr::one() {
+        power = power.square();
+        i+=1;
+    }
+    println!("i is {}", i);
+}
 #[test]
 fn test_binary_counting(){
     let test_input = vec![Fr::from(1), Fr::from(2)];
