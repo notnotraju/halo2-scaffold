@@ -93,9 +93,11 @@ pub struct MSMCircuitParams {
 // enforce this via a_i = b_i || c_i, via RLC.
 // here we may perhaps do this without.
 
+#[derive(Deserialize)]
 pub struct Lengths<const n: usize>{
     pub lens: [usize; n],
 }
+#[derive(Deserialize)]
 pub struct FixedByteArraysInput<const n: usize>{
     pub s: [Fr; n],
     pub a: [[Fr; n];n], // list of n byte strings, each of length n.

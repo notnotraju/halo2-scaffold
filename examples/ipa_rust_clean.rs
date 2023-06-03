@@ -25,7 +25,7 @@ use num_traits::pow;
 // use halo2_proofs::halo2curves::CurveAffine;
 
 // use rand::{rngs::OsRng, thread_rng};
-// use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 // use std::{
 //     fs::{self, File},
 //     io::{BufRead, BufReader},
@@ -296,7 +296,7 @@ pub fn compute_b_fin_poly(z: &Fr, stage_randomness: &[Fr])-> Fr{
 // the model here is that the other inputs needed for the proof,
 // namely g_init, z, and revealed evaluation, are all
 // assumed to be public.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ProofOfInclusion {
 //    pub random_field_element: Fr,
     pub revealed_evaluation: Fr, // element claimed to be revealed
@@ -305,12 +305,12 @@ pub struct ProofOfInclusion {
     pub batching_helper_info: Option<BatchingHelperInfo>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BatchingHelperInfo{
     pub stage_randomness: Vec<Fr>,
     pub g_0: G1Affine,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BatchProofOfInclusion{
     pub list_of_proofs: Vec<ProofOfInclusion>,
     pub commitment_to_weighted_poly: G1Affine,
@@ -318,7 +318,7 @@ pub struct BatchProofOfInclusion{
 }
 // contains all of the information we need for the verifier to
 // verify a single IPA proof.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CompleteSingleIPAProof{
     pub commitment: G1Affine,
     pub z: Fr,
@@ -327,6 +327,8 @@ pub struct CompleteSingleIPAProof{
     pub U: G1Affine,
 }
 // all the information I need for batch verification.
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct CompleteBatchIPAProof {
     pub commitments: Vec<G1Affine>,
     pub vec_z: Vec<Fr>,

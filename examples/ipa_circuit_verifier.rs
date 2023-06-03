@@ -516,7 +516,7 @@ pub fn load_complete_batch_IPA_proof(
     make_public: &mut Vec<AssignedValue<Fr>>
 )->CircuitCompleteBatchProof{
 
-    let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
+    let fp_chip = FpChip::<Fr>::new(range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
     let ctx = builder.main(0);
     let vec_commitment = proof.commitments
