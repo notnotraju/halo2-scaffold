@@ -97,10 +97,20 @@ pub fn langrange_basis(k: usize)->Vec<Vec<Fr>> {
 pub fn hash_group_to_field(p: G1Affine)->Fr{
     let (x, y) = (p.x, p.y);
     let (x, y) = (fe_to_biguint(&x), fe_to_biguint(&y));
-    let sum = x + y;
-    biguint_to_fe(&sum)
+    let (x, y): (Fr, Fr) = (biguint_to_fe(&x), biguint_to_fe(&y));
+    let sum = (x + y);
+    sum
 }
 
+#[test]
+fn test_hash_group(){
+    let g = G1Affine::random(&mut rand::thread_rng());
+    let h = G1Affine::generator();
+    let h: G1Affine = (h+h).into();
+    println!("The random element g is {:?}", g);
+    let output = hash_group_to_field(g);
+    println!("The hash of the random element is {:?}", output);
+}
 // inputs: a vector of even length of field elements and a scalar w
 // computes vector_{lo} * w + vector{hi}* w^{-1}
 // folding of a will be fold(a, w). folding of b will be fold(b, w^{-1})
@@ -479,6 +489,7 @@ pub fn generate_single_evaluation_proof(
         current_hash *= evaluation;
         // so, first stage_randomness is evaluation. after that, I take
         // current_hash = (current_hash*evaluation)+hash(L_step) + hash(R_step)
+        
         if step!=k {current_hash += hash_group_to_field(L_step)
                         + hash_group_to_field(R_step);}
         stage_randomness.push(current_hash);
@@ -747,9 +758,11 @@ fn test_ipa() {
     //         Fr::from(l)).collect::<Vec<Fr>>();
     // let vector_to_commit = vec![Fr::from(1000), Fr::from(2), Fr::one(), Fr::one()];
     let commitment = MSM(&g_init, &vector_to_commit);
+    println!("commitment is {:?}", commitment); 
     let z = Fr::from(1000 as u64);
 
     let proof = generate_single_evaluation_proof(&g_init, &U, &vector_to_commit, &z, false);
+    println!("made it to proof construction");
     let complete_proof = CompleteSingleIPAProof {
         commitment,
         z,
