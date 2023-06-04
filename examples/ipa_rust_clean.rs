@@ -98,8 +98,7 @@ pub fn hash_group_to_field(p: G1Affine)->Fr{
     let (x, y) = (p.x, p.y);
     let (x, y) = (fe_to_biguint(&x), fe_to_biguint(&y));
     let (x, y): (Fr, Fr) = (biguint_to_fe(&x), biguint_to_fe(&y));
-    let sum = (x + y);
-    sum
+    x+y
 }
 
 #[test]
@@ -138,8 +137,8 @@ pub fn fold_vector_group(vector: &Vec<G1Affine>, w: &Fr) -> Vec<G1Affine> {
     folded_vector
 }
 
-// standard MSM
-pub fn MSM(vec_g: &[G1Affine], vec_a: &[Fr]) -> G1Affine {
+// standard msm
+pub fn msm(vec_g: &[G1Affine], vec_a: &[Fr]) -> G1Affine {
     let msm_answer = vec_g
         .iter()
         .zip(vec_a.iter())
@@ -162,8 +161,8 @@ pub fn inner_product(vec_a: &[Fr], vec_b: &[Fr]) -> Fr {
 
 // prover util
 // compute L and R from vec_a, vec_g, vec_b, and U.
-pub fn compute_L_R(vec_a: &Vec<Fr>, vec_g: &Vec<G1Affine>,
-                    vec_b: &Vec<Fr>, U: &G1Affine) 
+pub fn compute_l_r(vec_a: &Vec<Fr>, vec_g: &Vec<G1Affine>,
+                    vec_b: &Vec<Fr>, u: &G1Affine) 
                             -> (G1Affine, G1Affine) {
     let l = vec_a.len();
     assert!(vec_a.len() == vec_g.len() && 
@@ -171,16 +170,16 @@ pub fn compute_L_R(vec_a: &Vec<Fr>, vec_g: &Vec<G1Affine>,
     assert!(l%2 == 0); // make sure length is even
     // L = <a_{step,lo}, g_{step, hi}> + <a_{step,lo}, b_{step,hi}>U
     // R = <a_{step,hi}, g_{step, lo}> + <a_{step,hi}, b_{step,lo}>U
-    let L = MSM(
+    let left = msm(
         &vec_g[l/2..], &vec_a[..l/2]) + 
-        U * inner_product(&vec_a[..l/2], &vec_b[l/2..]
+        u * inner_product(&vec_a[..l/2], &vec_b[l/2..]
     );
-    let R = MSM(
+    let right = msm(
         &vec_g[..l/2], &vec_a[l/2..]) + 
-        U * inner_product(&vec_a[l/2..], &vec_b[..l/2]
+        u * inner_product(&vec_a[l/2..], &vec_b[..l/2]
     );
 //    println!("At the current stage, (L,R) are ({:?}, {:?})", L, R);
-    (L.into(), R.into())
+    (left.into(), right.into())
 }
 
 // binary counting pattern: given
@@ -199,7 +198,7 @@ pub fn binary_counting_pattern(vec_w: &Vec<Fr>)-> Vec<Fr> {
         let mut w_prod = w_init;
         for j in 0..vec_w.len(){
             if i & (1<<j) != 0 {
-                w_prod *= (vec_w[j]* vec_w[j]);
+                w_prod *= vec_w[j]* vec_w[j];
             }
         }
         pattern.push(w_prod);
@@ -357,10 +356,11 @@ pub fn generate_hasher()->Poseidon<Fr, 3, 2>{
     Poseidon::<Fr, 3, 2>::new(number_of_full_rounds, number_of_half_rounds)
 }
 
+// compute_randomness is a verifier util.
 // given a ProofOfInclusion, compute the vector stage_randomness.
 // this is simulating the Fiat-Shamir process, and outputs
 // a vector <w_k, ..., w_1>, where the numbering refers to 
-// the stage to which it corresponds.
+// the stage to which it corresponds. (see blog post or halo paper)
 
 // here, we have a use_poseidon flag, which is used to determine
 // if we use the Poseidon hash function as well. (As of now, we don't.)
@@ -401,7 +401,6 @@ pub fn compute_randomness(
             }
         }
         stage_randomness
-
     }
 
 // a simple protocol to ``batch randomness''. We compute two "random elements":
@@ -439,7 +438,7 @@ pub fn generate_single_evaluation_proof(
     let k = int_log_2(n);
     // set up pederson commit, and the running vectors storing
     // the current a, g, b values.
-    let _pederson_commit = MSM(g_init, vector_to_commit);
+    let _pederson_commit = msm(g_init, vector_to_commit);
 
     let mut a_vec = Vec::new();
     let mut g_vec = Vec::new();
@@ -468,30 +467,30 @@ pub fn generate_single_evaluation_proof(
     g_vec.push(g_current.clone());
     b_vec.push(b_current.clone());
 
-    let mut L: Vec<G1Affine> = Vec::new();
-    let mut R: Vec<G1Affine> = Vec::new();
+    let mut left: Vec<G1Affine> = Vec::new();
+    let mut right: Vec<G1Affine> = Vec::new();
     let mut stage_randomness: Vec<Fr> = Vec::new();
 
     // goes from step k to step 1. These are the stages
     // with numbering taken from the halo paper.
     for step in (1..k+1).rev() {
 
-        let (L_step, R_step) = compute_L_R(
+        let (left_step, right_step) = compute_l_r(
         &a_current,
         &g_current,
         &b_current, 
             U);
 
-        L.push(L_step);
-        R.push(R_step);
+        left.push(left_step);
+        right.push(right_step);
         // current_hash is my surrogate Fiat-Shamir.
         // this will be improved later.
         current_hash *= evaluation;
         // so, first stage_randomness is evaluation. after that, I take
         // current_hash = (current_hash*evaluation)+hash(L_step) + hash(R_step)
         
-        if step!=k {current_hash += hash_group_to_field(L_step)
-                        + hash_group_to_field(R_step);}
+        if step!=k {current_hash += hash_group_to_field(left_step)
+                        + hash_group_to_field(right_step);}
         stage_randomness.push(current_hash);
         let current_hash_inv = current_hash.clone().invert().unwrap();
         // fold the vectors a, b, g
@@ -511,9 +510,9 @@ pub fn generate_single_evaluation_proof(
     // here, stage_proofs is a vector of size k. The lth element is the *stage k-l* proof.
     // In particular: [[L_k, R_k], [L_{k-1}, R_{k-1}], ..., [L_1, R_1]]
     // I emphasize: we are using the numbering from the Halo paper!
-    let stage_proof = L.iter()
-                .zip(R.iter())
-                .map(|(l, r)| [*l, *r])
+    let stage_proof = left.iter()
+                .zip(right.iter())
+                .map(|(l_step, r_step)| [*l_step, *r_step])
                 .collect::<Vec<[G1Affine;2]>>();
     
     let batching_helper_info = {
@@ -543,7 +542,7 @@ pub fn generate_batch_evaluation_proof(
     assert!(vec_z.len() == vectors_to_commit.len());
     let n = g_init.len();
     let _commitments = vectors_to_commit.iter()
-        .map(|vector_to_commit| MSM(g_init, vector_to_commit))
+        .map(|vector_to_commit| msm(g_init, vector_to_commit))
         .collect::<Vec<_>>();
     
     // list_of_proofs is a list of the inclusion proofs.
@@ -586,7 +585,7 @@ pub fn generate_batch_evaluation_proof(
         weighted_polynomials.push(weighted_polynomial);
         power_of_r *= r;
     }
-    let commitment_to_weighted_poly = MSM(g_init, &sum_of_weighted_polynomials);
+    let commitment_to_weighted_poly = msm(g_init, &sum_of_weighted_polynomials);
     // now, we have the weighted polynomials. We need to compute the sum of these polynomials.
     // This is the batched polynomial.
     let proof_of_proofs = generate_single_evaluation_proof(g_init, U, &sum_of_weighted_polynomials, &t, false);
@@ -622,7 +621,7 @@ pub fn verify_single_evaluation_proof (
     // compute <s,g>. this means I need to use the binary counting pattern!
     // technical point: here I need to reverse the usual binary_counting_pattern.
     // note that this is the only essentially linear time part of the algorithm.
-    let G_0 = MSM(g_init, &binary_counting_pattern_reverse(&stage_randomness));
+    let G_0 = msm(g_init, &binary_counting_pattern_reverse(&stage_randomness));
     // compute b_0 
     let b_0 = compute_b_fin_poly(z, &stage_randomness);
     // println!("b_0: {:?}", b_0);
@@ -641,12 +640,12 @@ pub fn verify_single_evaluation_proof (
         .map(|r| r.square().invert().unwrap())
         .collect::<Vec<Fr>>();
     let P_prime = commitment + U*revealed_evaluation;
-    let first_Q = MSM(&L, &w_squared)
-     + MSM(&R, &w_inv_squared)
+    let first_Q = msm(&L, &w_squared)
+     + msm(&R, &w_inv_squared)
      + P_prime;
      //println!("Rust computes first_Q as {:?}", first_Q.to_affine());
-    //  println!("folded L is {:?}", MSM(&L, &w_squared));
-    // println!("folded R is {:?}", MSM(&R, &w_inv_squared));
+    //  println!("folded L is {:?}", msm(&L, &w_squared));
+    // println!("folded R is {:?}", msm(&R, &w_inv_squared));
     // println!("Rust verifier computes U*b_0 as {:?}", (U*b_0).to_affine());
     // println!("Rust verifier computes G_0+U*b_0 as {:?}", (G_0 + U*b_0).to_affine());
     let second_Q = (G_0 + U*b_0)*final_a;
@@ -656,13 +655,13 @@ pub fn verify_single_evaluation_proof (
 }
 
 pub fn verify_batch_evaluation_proof(
-    batched_IPA_proof: &CompleteBatchIPAProof,
+    batched_ipa_proof: &CompleteBatchIPAProof,
 )-> bool {
-    let commitments = &batched_IPA_proof.commitments;
-    let vec_z = &batched_IPA_proof.vec_z;
-    let batch_proof = &batched_IPA_proof.batch_proof;
-    let g_init = &batched_IPA_proof.g_init;
-    let U = &batched_IPA_proof.U;
+    let commitments = &batched_ipa_proof.commitments;
+    let vec_z = &batched_ipa_proof.vec_z;
+    let batch_proof = &batched_ipa_proof.batch_proof;
+    let g_init = &batched_ipa_proof.g_init;
+    let U = &batched_ipa_proof.U;
 
     let list_of_proofs = &batch_proof.list_of_proofs;
     let commitment_to_weighted_poly = &batch_proof.commitment_to_weighted_poly;
@@ -729,7 +728,7 @@ fn test_batched_ipa(){
         vec_z.push(Fr::random(&mut rand::thread_rng()));
     }
     let commitments = vectors_to_commit.iter()
-        .map(|vector_to_commit| MSM(&g_init, vector_to_commit))
+        .map(|vector_to_commit| msm(&g_init, vector_to_commit))
         .collect::<Vec<G1Affine>>();
     let batch_proof = generate_batch_evaluation_proof(&g_init, &U, &vectors_to_commit, &vec_z);
     let final_batch_IPA_proof = CompleteBatchIPAProof{
@@ -757,7 +756,7 @@ fn test_ipa() {
     // let vector_to_commit = (0..n).map(|l| 
     //         Fr::from(l)).collect::<Vec<Fr>>();
     // let vector_to_commit = vec![Fr::from(1000), Fr::from(2), Fr::one(), Fr::one()];
-    let commitment = MSM(&g_init, &vector_to_commit);
+    let commitment = msm(&g_init, &vector_to_commit);
     println!("commitment is {:?}", commitment); 
     let z = Fr::from(1000 as u64);
 
@@ -801,7 +800,7 @@ pub fn test_ipa_export(k: usize)-> CompleteSingleIPAProof {
     // let vector_to_commit = (0..n).map(|l| 
     //         Fr::from(l)).collect::<Vec<Fr>>();
     // let vector_to_commit = vec![Fr::from(1000), Fr::from(2), Fr::one(), Fr::one()];
-    let commitment = MSM(&g_init, &vector_to_commit);
+    let commitment = msm(&g_init, &vector_to_commit);
     let z = Fr::from(1000);
     let proof =
         generate_single_evaluation_proof(&g_init, &U, &vector_to_commit, &z, false);
@@ -836,7 +835,7 @@ pub fn test_batch_ipa_export(k: usize, batch_size: usize)-> CompleteBatchIPAProo
         vec_z.push(Fr::random(&mut rand::thread_rng()));
     }
     let commitments = vectors_to_commit.iter()
-        .map(|vector_to_commit| MSM(&g_init, vector_to_commit))
+        .map(|vector_to_commit| msm(&g_init, vector_to_commit))
         .collect::<Vec<G1Affine>>();
     let batch_proof = generate_batch_evaluation_proof(&g_init, &U, &vectors_to_commit, &vec_z);
     CompleteBatchIPAProof{
