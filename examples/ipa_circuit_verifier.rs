@@ -119,10 +119,10 @@ pub struct CircuitCompleteSingleProof {
     pub commitment: EcPoint<Fr, ProperCrtUint<Fr>>,
     pub z: AssignedValue<Fr>,
     pub g_init: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
-    pub U: EcPoint<Fr, ProperCrtUint<Fr>>,
+    pub u: EcPoint<Fr, ProperCrtUint<Fr>>,
     pub revealed_evaluation: AssignedValue<Fr>,
-    pub L: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
-    pub R: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
+    pub left: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
+    pub right: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
     pub final_a: AssignedValue<Fr>,
     pub k: usize, // number, such that 2^k is the degree of the polynomial we are commiting.
                   // equivalently, the number of steps in the proof.
@@ -131,7 +131,7 @@ pub struct CircuitCompleteSingleProof {
 // load a CompleteSingleIPAProof, per my rust implementation, 
 // into a CircuitCompleteSingleProof.
 
-pub fn load_complete_single_IPA_proof(
+pub fn load_complete_single_ipa_proof(
     builder: &mut GateThreadBuilder<Fr>,
     gate: &GateChip<Fr>,
     range: &RangeChip<Fr>,
@@ -157,8 +157,8 @@ pub fn load_complete_single_IPA_proof(
         map(|base| ecc_chip.load_private::<G1Affine>(ctx, (base.x, base.y)))
         .collect::<Vec<_>>();
     
-    let U = ecc_chip.load_private::<G1Affine>(ctx, (single_proof.U.x, single_proof.U.y));
-    let U = U.into();
+    let u = ecc_chip.load_private::<G1Affine>(ctx, (single_proof.u.x, single_proof.u.y));
+    
 
     let revealed_evaluation = ctx.load_witness(single_proof.proof.revealed_evaluation);
 
@@ -170,26 +170,26 @@ pub fn load_complete_single_IPA_proof(
         map(|proof| [ecc_chip.load_private::<G1Affine>(ctx, (proof[0].x, proof[0].y)), 
                                     ecc_chip.load_private::<G1Affine>(ctx, (proof[1].x, proof[1].y))])
         .collect::<Vec<_>>();
-    // process L, and R.
+    // process left and right.
 
-    let L = stage_proof.iter()
+    let left = stage_proof.iter()
                     .map(|proof| proof[0].clone())
                     .collect::<Vec<_>>();
-    let R = stage_proof.iter()
+    let right = stage_proof.iter()
                     .map(|proof| proof[1].clone())
                     .collect::<Vec<_>>();
 
 
     let final_a = ctx.load_witness(single_proof.proof.final_a);
-    let k = L.len();
+    let k = left.len();
     CircuitCompleteSingleProof {
         commitment,
         z,
         g_init,
-        U,
+        u,
         revealed_evaluation,
-        L,
-        R,
+        left,
+        right,
         final_a,
         k
     }
@@ -222,8 +222,8 @@ pub fn compute_stage_randomness_single_proof(
     gate: &GateChip<Fr>,
     z: AssignedValue<Fr>,
     revealed_evaluation: AssignedValue<Fr>,
-    L: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
-    R: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
+    left: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
+    right: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
     k: usize,
 )->(Vec<AssignedValue<Fr>>, Vec<AssignedValue<Fr>>){
 
@@ -239,17 +239,17 @@ pub fn compute_stage_randomness_single_proof(
     // INSTEAD, our randomness is given inductively by the formula below.
     // stage_randomness[0]=revealed evaluation.
     // stage_randomness[i] = 
-    //      stage_randomness[i-1] * revealed_evaluation + hash(L[i]) + hash(R[i])
+    //      stage_randomness[i-1] * revealed_evaluation + hash(left[i]) + hash(right[i])
     stage_randomness.push(revealed_evaluation);
-    let mut r = revealed_evaluation.value();
+    let r = revealed_evaluation.value();
     for i in 1..k{
         
         let scale_old_randomness = gate.mul(ctx, 
             revealed_evaluation, stage_randomness[i-1]);
-        let L_hash = hash_group_to_field_circuit(ctx, gate, L[i].clone());
-        let R_hash = hash_group_to_field_circuit(ctx, gate, R[i].clone());
-        let preliminary_randomness = gate.add(ctx, scale_old_randomness, L_hash);
-        let new_randomness = gate.add(ctx, preliminary_randomness, R_hash);
+        let left_hash = hash_group_to_field_circuit(ctx, gate, left[i].clone());
+        let right_hash = hash_group_to_field_circuit(ctx, gate, right[i].clone());
+        let preliminary_randomness = gate.add(ctx, scale_old_randomness, left_hash);
+        let new_randomness = gate.add(ctx, preliminary_randomness, right_hash);
         stage_randomness.push(new_randomness);
     }
     for i in 0..k{
@@ -329,7 +329,7 @@ pub fn evaluate_folded_product_poly(
 // verify a single IPA proof. Input is of type CompleteSingleIPAProof.
 // I make z and the revealed_evaluation public.
 // (I don't know how to make the commitment public!!)
-fn verify_single_IPA_proof(
+fn verify_single_ipa_proof(
     builder: &mut GateThreadBuilder<Fr>,
     // params: &MSMCircuitParams,
     single_proof: CompleteSingleIPAProof,
@@ -353,19 +353,19 @@ fn verify_single_IPA_proof(
 
     // load the various inputs from single_proof.
     let complete_assigned_proof = 
-        load_complete_single_IPA_proof(builder, &gate, &range, &params, &single_proof, make_public);
+        load_complete_single_ipa_proof(builder, &gate, &range, &params, &single_proof, make_public);
     
     // introduce variables for the inputs.
     let ctx = builder.main(0);
     let commitment = complete_assigned_proof.commitment;
     let z = complete_assigned_proof.z;
     let g_init = complete_assigned_proof.g_init;
-    let U = complete_assigned_proof.U;
+    let u = complete_assigned_proof.u;
     let revealed_evaluation = complete_assigned_proof.revealed_evaluation;
     
-    // load L, R, and final_a.
-    let L = complete_assigned_proof.L;
-    let R = complete_assigned_proof.R;
+    // load left, right, and final_a.
+    let left = complete_assigned_proof.left;
+    let right = complete_assigned_proof.right;
     let final_a = complete_assigned_proof.final_a;
     let ctx = builder.main(0);
     // set up k and compute stage_randomness.
@@ -377,8 +377,8 @@ fn verify_single_IPA_proof(
             &gate,
             z,
             revealed_evaluation,
-            L.clone(),
-            R.clone(),
+            left.clone(),
+            right.clone(),
             k);
     let ctx = builder.main(0);
     
@@ -396,7 +396,8 @@ fn verify_single_IPA_proof(
         &gate,
         z,
         stage_randomness.clone(),
-        stage_randomness_inv.clone());
+        stage_randomness_inv
+    );
 
     // compute the binary counting pattern of the stage_randomness.s
     let s = binary_counting_reverse(
@@ -407,40 +408,40 @@ fn verify_single_IPA_proof(
     // not sure what ``window bits'' is, only used for MSM.
     let window_bits = 4;
 
-    // intermediary in computation of P_Prime.
-    let U_x_revealed = 
+    // intermediary in computation of p_prime.
+    let u_x_revealed = 
         ecc_chip.scalar_mult(ctx,
-                            U.clone(), 
+                            u.clone(), 
                             vec![revealed_evaluation],
                             Fr::NUM_BITS as usize,
                             window_bits,
                             true);
     
-    let P_Prime =
-            ecc_chip.add_unequal(ctx, &commitment, &U_x_revealed, true);
-    // println!("Circuit managed to compute P_Prime! The value is {:?}, {:?}", bigint_to_fe::<Fr>(&P_Prime.x.value), bigint_to_fe::<Fr>(&P_Prime.y.value));
+    let p_prime =
+            ecc_chip.add_unequal(ctx, &commitment, &u_x_revealed, true);
+    // println!("Circuit managed to compute p_prime! The value is {:?}, {:?}", bigint_to_fe::<Fr>(&p_prime.x.value), bigint_to_fe::<Fr>(&p_prime.y.value));
     
-    // do MSM's with L, R and add to P_Prime.
-    let L_folded = ecc_chip.
+    // do MSM's with left, right and add to p_prime.
+    let left_folded = ecc_chip.
         variable_base_msm_in::<G1Affine>(
             builder, 
-            &L,
+            &left,
             stage_randomness_sq.iter().map(|x| vec![*x]).collect::<Vec<_>>(),
             Fr::NUM_BITS as usize,
             window_bits,
             0);
     
-    let R_folded = ecc_chip.
+    let right_folded = ecc_chip.
         variable_base_msm_in::<G1Affine>(
             builder, 
-            &R,
+            &right,
             stage_randomness_inv_sq.iter().map(|x| vec![*x]).collect::<Vec<_>>(),
             Fr::NUM_BITS as usize,
             window_bits,
             0);
 
     // let ctx = builder.main(0);
-    let G_0 = ecc_chip.
+    let g_0 = ecc_chip.
         variable_base_msm_in::<G1Affine>(
             builder, 
             &g_init,
@@ -451,38 +452,38 @@ fn verify_single_IPA_proof(
 
     let ctx = builder.main(0);
 
-    let L_folded_plus_R_folded = ecc_chip.add_unequal(ctx, &L_folded, &R_folded, true);
-    let first_Q = ecc_chip.add_unequal(ctx, &L_folded_plus_R_folded, &P_Prime, true);
-    // Ub_0
-    let U_x_b_0 = ecc_chip.scalar_mult(ctx,
-                            U, 
+    let left_folded_plus_right_folded = ecc_chip.add_unequal(ctx, &left_folded, &right_folded, true);
+    let first_q = ecc_chip.add_unequal(ctx, &left_folded_plus_right_folded, &p_prime, true);
+    // ub_0
+    let u_x_b_0 = ecc_chip.scalar_mult(ctx,
+                            u, 
                             vec![b_0],
                             Fr::NUM_BITS as usize,
                             window_bits,
                             true);
-    // println!("Circuit computes U_x_b_0: {:?}, {:?}", bigint_to_fe::<Fr>(&U_x_b_0.x.value), bigint_to_fe::<Fr>(&U_x_b_0.y.value)  );
+    // println!("Circuit computes u_x_b_0: {:?}, {:?}", bigint_to_fe::<Fr>(&u_x_b_0.x.value), bigint_to_fe::<Fr>(&u_x_b_0.y.value)  );
     let g0_plus_ub0 = ecc_chip.add_unequal(ctx,
-        &G_0,
-        &U_x_b_0,
+        &g_0,
+        &u_x_b_0,
         true);
     //println!("Circuit computes g0_plus_ub0: {:?}, {:?}", bigint_to_fe::<Fr>(&g0_plus_ub0.x.value), bigint_to_fe::<Fr>(&g0_plus_ub0.y.value)  );
-    let second_Q = ecc_chip.scalar_mult(ctx,
+    let second_q = ecc_chip.scalar_mult(ctx,
                             g0_plus_ub0, 
                             vec![final_a],
                             Fr::NUM_BITS as usize,
                             window_bits,
                             true);
-    // println!("Circuit computes first_Q: {:?}, {:?}", bigint_to_fe::<Fr>(&first_Q.x.value), bigint_to_fe::<Fr>(&first_Q.y.value)  );
-    // println!("Circuit computes second_Q: {:?}, {:?}", bigint_to_fe::<Fr>(&second_Q.x.value), bigint_to_fe::<Fr>(&second_Q.y.value)  );
+    // println!("Circuit computes first_q: {:?}, {:?}", bigint_to_fe::<Fr>(&first_q.x.value), bigint_to_fe::<Fr>(&first_q.y.value)  );
+    // println!("Circuit computes second_q: {:?}, {:?}", bigint_to_fe::<Fr>(&second_q.x.value), bigint_to_fe::<Fr>(&second_q.y.value)  );
     // for sanity, print out the differences between the coordinates.
     println!("Difference between the coordinates: {:?}, {:?}",
-        first_Q.x.native().value() - second_Q.x.native().value(), 
-        first_Q.y.native().value() - second_Q.y.native().value());
+        first_q.x.native().value() - second_q.x.native().value(), 
+        first_q.y.native().value() - second_q.y.native().value());
     // assert that the two points are equal. (Q: should I use an IsEqual gate instead?)
-    let out = ecc_chip.is_equal(ctx, first_Q.clone(), second_Q.clone());
+    let out = ecc_chip.is_equal(ctx, first_q.clone(), second_q.clone());
     make_public.push(out);
     // not sure if I need/want this!
-    ecc_chip.assert_equal(ctx, first_Q, second_Q);
+    ecc_chip.assert_equal(ctx, first_q, second_q);
 }
 
 // structure containing everything a verifier needs to verifier
@@ -492,22 +493,22 @@ pub struct CircuitCompleteBatchProof {
     pub vec_commitment: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
     pub vec_z: Vec<AssignedValue<Fr>>,
     pub g_init: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
-    pub U: EcPoint<Fr, ProperCrtUint<Fr>>,
+    pub u: EcPoint<Fr, ProperCrtUint<Fr>>,
     pub vec_revealed_evaluation: Vec<AssignedValue<Fr>>,
-    pub vec_L: Vec<Vec<EcPoint<Fr, ProperCrtUint<Fr>>>>,
-    pub vec_R: Vec<Vec<EcPoint<Fr, ProperCrtUint<Fr>>>>,
+    pub vec_left: Vec<Vec<EcPoint<Fr, ProperCrtUint<Fr>>>>,
+    pub vec_right: Vec<Vec<EcPoint<Fr, ProperCrtUint<Fr>>>>,
     pub vec_a_0: Vec<AssignedValue<Fr>>,
     pub vec_g_0: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>, // this is new for batching!
     // the final "blended" proof.
     pub final_commitment: EcPoint<Fr, ProperCrtUint<Fr>>,
-    pub final_L: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
-    pub final_R: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
+    pub final_left: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
+    pub final_right: Vec<EcPoint<Fr, ProperCrtUint<Fr>>>,
     pub final_a_0: AssignedValue<Fr>,
     pub k: usize,
     pub m: usize,    
 }
 
-pub fn load_complete_batch_IPA_proof(
+pub fn load_complete_batch_ipa_proof(
     builder: &mut GateThreadBuilder<Fr>,
     gate: &GateChip<Fr>,
     range: &RangeChip<Fr>,
@@ -531,13 +532,13 @@ pub fn load_complete_batch_IPA_proof(
                         .iter()
                         .map(|p| ecc_chip.load_private::<G1Affine>( ctx, (p.x,p.y)))
                         .collect::<Vec<_>>();
-    let U = ecc_chip.load_private::<G1Affine>( ctx, (proof.U.x, proof.U.y));
+    let u = ecc_chip.load_private::<G1Affine>( ctx, (proof.u.x, proof.u.y));
     let vec_revealed_evaluation = proof.batch_proof
                         .list_of_proofs
                         .iter()
                         .map(|x| ctx.load_witness(x.revealed_evaluation))
                         .collect::<Vec<_>>();
-    let vec_L = proof.batch_proof
+    let vec_left = proof.batch_proof
                         .list_of_proofs
                         .iter()
                         .map(|x| x.stage_proof
@@ -546,7 +547,7 @@ pub fn load_complete_batch_IPA_proof(
                                  (p[0].x,p[0].y)))
                             .collect::<Vec<_>>())
                         .collect::<Vec<_>>();
-    let vec_R = proof.batch_proof
+    let vec_right = proof.batch_proof
                     .list_of_proofs
                     .iter()
                     .map(|x| x.stage_proof
@@ -573,32 +574,32 @@ pub fn load_complete_batch_IPA_proof(
     // load the final proof.
     let final_commitment =
         ecc_chip.load_private::<G1Affine>(ctx, (proof.batch_proof.commitment_to_weighted_poly.x, proof.batch_proof.commitment_to_weighted_poly.y));
-    let final_L = proof.batch_proof.proof_of_weighted_poly
+    let final_left = proof.batch_proof.proof_of_weighted_poly
                         .stage_proof.iter()
                         .map(|p| ecc_chip.load_private::<G1Affine>(ctx,
                              (p[0].x,p[0].y)))
                         .collect::<Vec<_>>();
-    let final_R = proof.batch_proof.proof_of_weighted_poly
+    let final_right = proof.batch_proof.proof_of_weighted_poly
                         .stage_proof.iter()
                         .map(|p| ecc_chip.load_private::<G1Affine>(ctx,
                              (p[1].x,p[1].y)))
                         .collect::<Vec<_>>();
     let final_a_0 = ctx.load_witness(proof.batch_proof.proof_of_weighted_poly.final_a);
-    let k = final_L.len(); // modify? 
-    let m = vec_L.len(); // modify
+    let k = final_left.len(); // modify? 
+    let m = vec_left.len(); // modify
     CircuitCompleteBatchProof{
         vec_commitment,
         vec_z,
         g_init,
-        U,
+        u,
         vec_revealed_evaluation,
-        vec_L,
-        vec_R,
+        vec_left,
+        vec_right,
         vec_a_0,
         vec_g_0,
         final_commitment,
-        final_L,
-        final_R,
+        final_left,
+        final_right,
         final_a_0,
         k,
         m
@@ -606,7 +607,7 @@ pub fn load_complete_batch_IPA_proof(
 }
 
 // batch verification. input is a CircuitCompleteBatchProof.
-pub fn verify_batch_IPA_proof(
+pub fn verify_batch_ipa_proof(
     builder: &mut GateThreadBuilder<Fr>,
     // params: &MSMCircuitParams,
     complete_batch_ipa_proof: CompleteBatchIPAProof,
@@ -622,12 +623,12 @@ pub fn verify_batch_IPA_proof(
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
     let gate = GateChip::<Fr>::default();
     let range = RangeChip::<Fr>::default(params.lookup_bits);
-    let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
+    // let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     // let ecc_chip = EccChip::new(&fp_chip);
 
     // obtain context.
     let ctx = builder.main(0);
-    let circuit_batch_ipa_proof = load_complete_batch_IPA_proof(
+    let circuit_batch_ipa_proof = load_complete_batch_ipa_proof(
         builder,
         &gate,
         &range,
@@ -636,19 +637,19 @@ pub fn verify_batch_IPA_proof(
         make_public,
     );
     // get access to the inputs.
-    let vec_commitment = circuit_batch_ipa_proof.vec_commitment;
+    let _vec_commitment = circuit_batch_ipa_proof.vec_commitment;
     let vec_z = circuit_batch_ipa_proof.vec_z;
-    let g_init = circuit_batch_ipa_proof.g_init;
-    let U = circuit_batch_ipa_proof.U;
+    let _g_init = circuit_batch_ipa_proof.g_init;
+    let _u = circuit_batch_ipa_proof.u;
     let vec_revealed_evaluation = circuit_batch_ipa_proof.vec_revealed_evaluation;
-    let vec_L = circuit_batch_ipa_proof.vec_L;
-    let vec_R = circuit_batch_ipa_proof.vec_R;
-    let vec_a_0 = circuit_batch_ipa_proof.vec_a_0;
-    let vec_g_0 = circuit_batch_ipa_proof.vec_g_0;
-    let final_commitment = circuit_batch_ipa_proof.final_commitment;
-    let final_L = circuit_batch_ipa_proof.final_L;
-    let final_R = circuit_batch_ipa_proof.final_R;
-    let final_a_0 = circuit_batch_ipa_proof.final_a_0;
+    let vec_left = circuit_batch_ipa_proof.vec_left;
+    let vec_right = circuit_batch_ipa_proof.vec_right;
+    let _vec_a_0 = circuit_batch_ipa_proof.vec_a_0;
+    let _vec_g_0 = circuit_batch_ipa_proof.vec_g_0;
+    let _final_commitment = circuit_batch_ipa_proof.final_commitment;
+    let _final_left = circuit_batch_ipa_proof.final_left;
+    let _final_right = circuit_batch_ipa_proof.final_right;
+    let _final_a_0 = circuit_batch_ipa_proof.final_a_0;
     let k = circuit_batch_ipa_proof.k;
     let m = circuit_batch_ipa_proof.m;
 
@@ -659,7 +660,7 @@ pub fn verify_batch_IPA_proof(
 
     for i in 0..m {
         let (stage_randomness, stage_randomness_inv) = 
-            compute_stage_randomness_single_proof(builder, &gate, vec_z[i], vec_revealed_evaluation[i], vec_L[i].clone(), vec_R[i].clone(), k);
+            compute_stage_randomness_single_proof(builder, &gate, vec_z[i], vec_revealed_evaluation[i], vec_left[i].clone(), vec_right[i].clone(), k);
         vec_stage_randomness.push(stage_randomness);
         vec_stage_randomness_inv.push(stage_randomness_inv);
     }
@@ -682,7 +683,7 @@ pub fn verify_batch_IPA_proof(
             evaluate_folded_product_poly(
                 ctx, 
                 &gate,
-                t.clone(), 
+                t, 
                 vec_stage_randomness[i].clone(), 
                 vec_stage_randomness_inv[i].clone());
         partial_evaluations.push(
@@ -690,19 +691,19 @@ pub fn verify_batch_IPA_proof(
         );
     }
 
-    let final_claimed_evaluation = partial_evaluations[m].clone();
+    let final_claimed_evaluation = partial_evaluations[m];
     println!("final_claimed_evaluation: {:?}", final_claimed_evaluation.value());
     let final_proof = CompleteSingleIPAProof{
         commitment: complete_batch_ipa_proof.batch_proof.commitment_to_weighted_poly,
         z: *t.value(),
         proof: complete_batch_ipa_proof.batch_proof.proof_of_weighted_poly,
         g_init: complete_batch_ipa_proof.g_init,
-        U: complete_batch_ipa_proof.U,
+        u: complete_batch_ipa_proof.u,
     };
     // now just have to verify the single proof, with respect to this claimed evaluation.
     // NOTE: there is an ``out'' variable that has been made_public. we
     // should check that is 1.
-    verify_single_IPA_proof(builder, final_proof, make_public);
+    verify_single_ipa_proof(builder, final_proof, make_public);
     
   }
 
@@ -719,13 +720,13 @@ fn main() {
     .unwrap();
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
     std::env::set_var("DEGREE", 4.to_string());
-    let private_inputs = test_ipa_export(8);
+    let private_inputs = test_ipa_export(4);
     let random_group_element = G1Affine::random(&mut OsRng);
     let batch_private_inputs = test_batch_ipa_export(2,10);
-    // run_builder_on_inputs(verify_single_IPA_proof_hack, args, private_inputs);
+    // run_builder_on_inputs(verify_single_ipa_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
-    run_builder_on_inputs(verify_single_IPA_proof, args, private_inputs);
-    // run_builder_on_inputs(verify_batch_IPA_proof, args, batch_private_inputs);
+    run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
+    // run_builder_on_inputs(verify_batch_ipa_proof, args, batch_private_inputs);
     // run_builder_on_inputs(group_to_field, args, random_group_element);
 }
 
