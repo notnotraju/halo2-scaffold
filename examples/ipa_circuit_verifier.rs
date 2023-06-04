@@ -210,6 +210,32 @@ pub fn hash_group_to_field_circuit(
     gate.add(ctx, *x, *y)    
   }
 
+  pub fn test_msm(
+    builder: &mut GateThreadBuilder<Fr>,
+    (p, s): (Vec<G1Affine>, Vec<Fr>),
+    make_public: &mut Vec<AssignedValue<Fr>>,
+  ){
+    let path = "examples/msm_circuit.config";
+    let params: MSMCircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
+    let gate = GateChip::<Fr>::default();
+    let range = RangeChip::<Fr>::default(params.lookup_bits);
+    let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
+    let ecc_chip = EccChip::new(&fp_chip);
+            // obtain context.
+    let ctx = builder.main(0);
+    let p = 
+        p
+        .iter()
+        .map(|base| ecc_chip.load_private::<G1Affine>(ctx, (base.x, base.y)))
+        .collect::<Vec<_>>();
+    let s = s.iter().map(|x| vec![ctx.load_witness(*x)]).collect::<Vec<_>>();
+    let out = ecc_chip.variable_base_msm_in::<G1Affine>(builder, &p, s, Fr::NUM_BITS as usize, 4, 0);
+   
+  }
+
 
 // given some part of the proof, complete the "stage_randomness"
 // (this is where the verifier simulates the Fiat-Shamir.)
@@ -722,12 +748,15 @@ fn main() {
     std::env::set_var("DEGREE", 4.to_string());
     let private_inputs = test_ipa_export(4);
     let random_group_element = G1Affine::random(&mut OsRng);
+    let random_group_elements = (0..256).map(|_| G1Affine::random(&mut OsRng)).collect::<Vec<_>>();
+    let random_scalars = (0..256).map(|_| Fr::random(&mut OsRng)).collect::<Vec<_>>();
     let batch_private_inputs = test_batch_ipa_export(2,10);
     // run_builder_on_inputs(verify_single_ipa_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
-    run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
+    //run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
     // run_builder_on_inputs(verify_batch_ipa_proof, args, batch_private_inputs);
     // run_builder_on_inputs(group_to_field, args, random_group_element);
+    run_builder_on_inputs(test_msm, args, (random_group_elements, random_scalars));
 }
 
 
