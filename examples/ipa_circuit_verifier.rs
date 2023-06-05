@@ -209,7 +209,7 @@ pub fn hash_group_to_field_circuit(
     let y = p.y.native();
     gate.add(ctx, *x, *y)    
   }
-
+// written to test the number of gates I need.
   pub fn test_msm(
     builder: &mut GateThreadBuilder<Fr>,
     (p, s): (Vec<G1Affine>, Vec<Fr>),
@@ -232,8 +232,7 @@ pub fn hash_group_to_field_circuit(
         .map(|base| ecc_chip.load_private::<G1Affine>(ctx, (base.x, base.y)))
         .collect::<Vec<_>>();
     let s = s.iter().map(|x| vec![ctx.load_witness(*x)]).collect::<Vec<_>>();
-    let out = ecc_chip.variable_base_msm_in::<G1Affine>(builder, &p, s, Fr::NUM_BITS as usize, 4, 0);
-   
+    let _out = ecc_chip.variable_base_msm_in::<G1Affine>(builder, &p, s, Fr::NUM_BITS as usize, 4, 0);
   }
 
 
@@ -267,7 +266,7 @@ pub fn compute_stage_randomness_single_proof(
     // stage_randomness[i] = 
     //      stage_randomness[i-1] * revealed_evaluation + hash(left[i]) + hash(right[i])
     stage_randomness.push(revealed_evaluation);
-    let r = revealed_evaluation.value();
+    let _r = revealed_evaluation.value();
     for i in 1..k{
         
         let scale_old_randomness = gate.mul(ctx, 
@@ -373,10 +372,8 @@ fn verify_single_ipa_proof(
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
-
-    // obtain context.
-    let ctx = builder.main(0);
-
+    // // obtain context.
+    // let ctx = builder.main(0);
     // load the various inputs from single_proof.
     let complete_assigned_proof = 
         load_complete_single_ipa_proof(builder, &gate, &range, &params, &single_proof, make_public);
