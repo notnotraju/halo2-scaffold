@@ -2,7 +2,7 @@
 // more of a fig leaf.
 mod ipa_rust_clean;
 
-use ipa_rust_clean::{CompleteBatchIPAProof, msm, inner_product, hash_group_to_field};
+use ipa_rust_clean::{CompleteBatchIPAProof, msm, inner_product, hash_group_to_field, generate_batch_evaluation_proof};
 
 use poseidon_rust::Poseidon;
 use ff::{Field, PrimeField};
@@ -24,12 +24,8 @@ use halo2_base::{
 
 use num_traits::pow;
 use serde::{Deserialize, Serialize};
-
-type path: Vec<Vec<u8>>;
-
 use snark_verifier::util::arithmetic::PrimeCurveAffine;
 
-// DEFAULT ASSUMPTION: 32 bytes for key, 32 bytes for value.
 // write something to generate single VerkleTree proof.
 
 const LEN: usize = 32;
@@ -47,7 +43,21 @@ pub struct SingleVerkleProof{
 pub struct BatchVerkleProof{
     pub commitment: Vec<G1Affine>,
     pub keys: Vec<Vec<u8>>,
-    pub paths: Vec<path>,}
+    pub paths: Vec<VecByteArrays>,}
+
+pub struct SuffixExtensionNode<'a>{
+    pub stem: &'a [u8],
+    pub suffix_commitments: (G1Affine, G1Affine), //(C1, C2), commitments to the modified leaves 
+    pub extension_commitment: G1Affine, // C = Commit (1, stem, C1, C2, 0,...,0)
+    pub left_leaves: Vec<Fr>,
+    pub right_leaves: Vec<Fr>,
+}
+pub struct InternalNode<'a>{
+    pub children_commitments: Vec<G1Affine>, // (C_0,..., C_{255}). need to set ``default values''!
+    pub commitment: G1Affine,
+    pub truncated_key: &'a [u8],
+}
+
 
 impl SingleVerkleProof{
     pub fn new(
@@ -56,6 +66,7 @@ impl SingleVerkleProof{
         path: Vec<Vec<u8>>,
         value: Vec<u8>
     ) -> Self{
+
         assert!(key.len() == LEN && value.len() == LEN);
         let first_half_value = &value[0..HALF_LEN];
         let second_half_value = &value[HALF_LEN..32];
@@ -67,13 +78,17 @@ impl SingleVerkleProof{
         // force key == concatenation of path (for testing)
         assert_eq!(key, key_from_path);
         let branching_bytes = path.iter().map(|x| x[0]).collect::<Vec<u8>>();
+
         // the suffix extension claims.
         let suffix = *branching_bytes.last().unwrap();
         let stem_len = HALF_LEN - 1;
         let stem_as_vec_fr = (0..stem_len)
             .map(|i| Fr::from((key[i] as u64)))
             .collect::<Vec<_>>();
-        
+        let stem_as_bytes = &key[0..stem_len];
+        // value_leaves = the two values that are the leaves of the suffix extension,
+        // i.e., the way the verkle tree "stores" the value in *two* leaves (rather than one)
+        // (it needs two because the field is only 254 bits.)
         let value_leaves = value_to_verkle_form(&value);
         
         let which_leaf_bunch = {if suffix<128 {true} else {false}};
@@ -113,6 +128,7 @@ impl SingleVerkleProof{
         vector_to_commit_suffix[2] = hash_group_to_field(first_commitment);
         vector_to_commit_suffix[3] = hash_group_to_field(second_commitment);
 
+        
         let suffix_commit = msm(&g_init, &vector_to_commit_suffix);
               
         let path_len = path.len();
