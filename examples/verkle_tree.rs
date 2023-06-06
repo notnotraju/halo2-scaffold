@@ -24,14 +24,21 @@ use halo2_base::{
 use num_traits::pow;
 use serde::{Deserialize, Serialize};
 
+type path: Vec<Vec<u8>>;
+
 // write something to generate single VerkleTree proof.
 pub struct SingleVerkleProof{
     pub commitment: G1Affine,
     pub key: Vec<u8>,
-    pub path: Vec<Vec<u8>>,
+    pub path: path,
     pub value: u8,
     pub proof: CompleteBatchIPAProof,
 }
+
+pub struct BatchVerkleProof{
+    pub commitment: Vec<G1Affine>,
+    pub keys: Vec<Vec<u8>>,
+    pub paths: Vec<path>,}
 
 impl SingleVerkleProof{
     pub fn new(
