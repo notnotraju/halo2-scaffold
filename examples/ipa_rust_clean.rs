@@ -58,7 +58,7 @@ fn test_2_k_root(){
 // P_i = 1/2^k * [1=omega^{2^k}, \omega^{2^k-i},...,\omega^i]
 // specialized for F_r, based on the fact that 2^28 is the
 // power of 2 dividing r-1.
-pub fn langrange_basis(k: usize)->Vec<Vec<Fr>> {
+pub fn generate_lagrange_basis(k: usize)->Vec<Vec<Fr>> {
     assert!(k<=10);
     let mut lagrange_basis: Vec<Vec<Fr>> = Vec::new();
     let omega = compute_2_k_root(k, 28);
@@ -872,7 +872,7 @@ fn test_binary_counting(){
 #[test]
 fn test_lagrange_basis(){
     let k = 2;
-    let lagrange_basis = langrange_basis(k);
+    let lagrange_basis = generate_lagrange_basis(k);
     println!("The lagrange basis is: {:?}", lagrange_basis);
 
 }
