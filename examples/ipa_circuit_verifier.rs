@@ -751,9 +751,9 @@ fn main() {
     // run_builder_on_inputs(verify_single_ipa_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
     //run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
-    // run_builder_on_inputs(verify_batch_ipa_proof, args, batch_private_inputs);
+    run_builder_on_inputs(verify_batch_ipa_proof, args, batch_private_inputs);
     // run_builder_on_inputs(group_to_field, args, random_group_element);
-    run_builder_on_inputs(test_msm, args, (random_group_elements, random_scalars));
+    // run_builder_on_inputs(test_msm, args, (random_group_elements, random_scalars));
 }
 
 

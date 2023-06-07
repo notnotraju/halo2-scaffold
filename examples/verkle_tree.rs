@@ -32,6 +32,8 @@ use snark_verifier::util::arithmetic::PrimeCurveAffine;
 
 const LEN: usize = 32;
 const HALF_LEN: usize = 16;
+const WIDTH: usize = 256;
+const LOG_WIDTH: usize = 8;
 
 type VecByteArrays = Vec<Vec<u8>>;
 pub struct SingleVerkleProof{
@@ -80,6 +82,11 @@ pub fn commit_vector(to_commit: Vec<Fr>,
                         .fold(vec![Fr::zero(); 256], |acc, x| 
                         {acc.iter().zip(x.iter()).map(|(a, b)| a + b).collect::<Vec<_>>()});
     msm(&g_init, &coefficients)
+}
+
+pub fn commit_vector_group(to_commit: Vec<G1Affine>, lagrange_bases: Vec<Vec<Fr>>, g_init: Vec<G1Affine>)->G1Affine{
+    let to_commit = to_commit.iter().map(|x| hash_group_to_field(poseidon_hash_g1(*x))).collect::<Vec<_>>();
+    commit_vector(to_commit, lagrange_bases, g_init)
 }
 
 pub fn pow_of_r(r: u64, k: usize)->Vec<Fr>{
@@ -187,8 +194,18 @@ impl InternalNode{
         path: Vec<Vec<u8>>,
         value: Vec<u8>
     )->(Vec<Self>, SuffixExtensionNode){
+        // build a list of the "truncated paths" from the path. This is the set of iterated concatenations.
+
+        let mut truncated_paths = vec![];
+        let mut last_full_path = vec![];
+        for chunk in path.iter(){
+            last_full_path.extend(chunk.clone());
+            truncated_paths.push(chunk.clone());
+        }
+        // build the SuffixExtensionNode
         let suffix_extension_node =
              SuffixExtensionNode::new(g_init.clone(), key.clone(), value.clone());
+        // first child commitment is the extension_commitment.
         let mut child_commitment = suffix_extension_node.extension_commitment;
         let stem_len = LEN - 1;
         let stem = key[0..stem_len].to_vec();
@@ -202,6 +219,12 @@ impl InternalNode{
             let branching_byte = branching_bytes[i];
             let mut children_commitments = vec![G1Affine::identity(); 256];
             children_commitments[branching_byte as usize] = child_commitment;
+            
+            let internal_node = InternalNode{
+                children_commitments,
+                commitment: G1Affine::identity(),
+                truncated_key: last_full_path.clone(),
+            };
 
 
         }
