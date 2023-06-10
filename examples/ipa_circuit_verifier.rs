@@ -22,9 +22,12 @@ use halo2_proofs::plonk::Circuit;
 
 
 use snark_verifier::loader::halo2::IntegerInstructions;
+// commented out before June 9th. I think this native implementation is not compatible with PoseidonChip
 // use poseidon_rust::Poseidon;
-use snark_verifier::util::hash::OptimizedPoseidonSpec as Spec;
-use snark_verifier::util::hash::Poseidon as Poseidon;
+
+// as of juin 9th, I comment out the rest of the Poseidon stuff.  
+// use snark_verifier::util::hash::OptimizedPoseidonSpec as Spec;
+// use snark_verifier::util::hash::Poseidon as Poseidon;
 use snark_verifier::loader::native::NativeLoader;
 
 
@@ -75,7 +78,7 @@ use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
 };
-use poseidon::PoseidonChip;
+// use poseidon::PoseidonChip;
 
 
 
@@ -499,9 +502,10 @@ fn verify_single_ipa_proof(
     // println!("Circuit computes first_q: {:?}, {:?}", bigint_to_fe::<Fr>(&first_q.x.value), bigint_to_fe::<Fr>(&first_q.y.value)  );
     // println!("Circuit computes second_q: {:?}, {:?}", bigint_to_fe::<Fr>(&second_q.x.value), bigint_to_fe::<Fr>(&second_q.y.value)  );
     // for sanity, print out the differences between the coordinates.
-    println!("Difference between the coordinates: {:?}, {:?}",
+    println!("Difference between the coordinates of the two elliptic curve points: {:?}, {:?}",
         first_q.x.native().value() - second_q.x.native().value(), 
         first_q.y.native().value() - second_q.y.native().value());
+    println!("This difference should be (0, 0) if proof succeeded.");
     // assert that the two points are equal. (Q: should I use an IsEqual gate instead?)
     let out = ecc_chip.is_equal(ctx, first_q.clone(), second_q.clone());
     make_public.push(out);
@@ -713,11 +717,13 @@ pub fn verify_batch_ipa_proof(
             gate.mul_add(ctx, pow_of_r[i], bare_stage_i_evaluation, partial_evaluations[i])
         );
     }
-
+    let commitment = complete_batch_ipa_proof.batch_proof.commitment_to_weighted_poly;
+    
     let final_claimed_evaluation = partial_evaluations[m];
-    println!("final_claimed_evaluation: {:?}", final_claimed_evaluation.value());
+    println!("Claimed commitment of merged IPA proof: {:?}", commitment);
+    println!("claimed evaluation of merged IPA proof: {:?}", final_claimed_evaluation.value());
     let final_proof = CompleteSingleIPAProof{
-        commitment: complete_batch_ipa_proof.batch_proof.commitment_to_weighted_poly,
+        commitment,
         z: *t.value(),
         proof: complete_batch_ipa_proof.batch_proof.proof_of_weighted_poly,
         g_init: complete_batch_ipa_proof.g_init,
@@ -747,7 +753,7 @@ fn main() {
     let random_group_element = G1Affine::random(&mut OsRng);
     let random_group_elements = (0..256).map(|_| G1Affine::random(&mut OsRng)).collect::<Vec<_>>();
     let random_scalars = (0..256).map(|_| Fr::random(&mut OsRng)).collect::<Vec<_>>();
-    let batch_private_inputs = test_batch_ipa_export(2,10);
+    let batch_private_inputs = test_batch_ipa_export(8,10);
     // run_builder_on_inputs(verify_single_ipa_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
     //run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
