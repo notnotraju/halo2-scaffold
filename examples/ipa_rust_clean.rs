@@ -848,6 +848,38 @@ pub fn test_batch_ipa_export(k: usize, batch_size: usize)-> CompleteBatchIPAProo
     }
 }
 
+// what I pass to test my batch circuit verifier.
+// the ith polynomial is [i, i+j, i+2j, ..., i+(n-1)j]
+pub fn structured_batch_ipa_export(k: usize, batch_size: usize)-> CompleteBatchIPAProof {
+
+    let n = pow(2, k);
+    let mut g_init = Vec::new();
+    for _ in 0..n {
+        g_init.push(G1Affine::random(&mut rand::thread_rng()));
+    }
+    let u = G1Affine::random(&mut rand::thread_rng());
+    let mut vectors_to_commit: Vec<Vec<Fr>> = Vec::new();
+    let mut vec_z: Vec<Fr> = Vec::new();
+    // populate the vectors_to_commit and zs
+    for i in 0..batch_size {
+        let vector_to_commit = (0..n).map(|j| 
+            Fr::from((i+j) as u64)).collect::<Vec<Fr>>();
+        vectors_to_commit.push(vector_to_commit);
+        vec_z.push(Fr::one());
+    }
+    let commitments = vectors_to_commit.iter()
+        .map(|vector_to_commit| msm(&g_init, vector_to_commit))
+        .collect::<Vec<G1Affine>>();
+    let batch_proof = generate_batch_evaluation_proof(&g_init, &u, &vectors_to_commit, &vec_z);
+    CompleteBatchIPAProof{
+        commitments,
+        vec_z,
+        batch_proof,
+        g_init: g_init.clone(),
+        u,
+    }
+}
+
 // test 2-primary root of unity stuff.
 // seems that root_of_unity() has order 2^{28}
 // to compute lagrange basis for 2^n, we need the "barycentric formula"

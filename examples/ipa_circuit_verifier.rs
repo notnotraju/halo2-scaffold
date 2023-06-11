@@ -7,7 +7,8 @@ mod ipa_rust_clean;
 use halo2_ecc::bigint::ProperCrtUint;
 use ipa_rust_clean::{CompleteSingleIPAProof, 
     test_ipa_export, CompleteBatchIPAProof,
-    test_batch_ipa_export, hash_group_to_field};
+    test_batch_ipa_export, hash_group_to_field,
+    structured_batch_ipa_export};
 
 #[allow(unused_imports)]
 use ark_std::{start_timer, end_timer};
@@ -436,12 +437,11 @@ fn verify_single_ipa_proof(
 
     // intermediary in computation of p_prime.
     let u_x_revealed = 
-        ecc_chip.scalar_mult(ctx,
+        ecc_chip.scalar_mult::<G1Affine>(ctx,
                             u.clone(), 
                             vec![revealed_evaluation],
                             Fr::NUM_BITS as usize,
-                            window_bits,
-                            true);
+                            window_bits);
     
     let p_prime =
             ecc_chip.add_unequal(ctx, &commitment, &u_x_revealed, true);
@@ -481,24 +481,22 @@ fn verify_single_ipa_proof(
     let left_folded_plus_right_folded = ecc_chip.add_unequal(ctx, &left_folded, &right_folded, true);
     let first_q = ecc_chip.add_unequal(ctx, &left_folded_plus_right_folded, &p_prime, true);
     // ub_0
-    let u_x_b_0 = ecc_chip.scalar_mult(ctx,
+    let u_x_b_0 = ecc_chip.scalar_mult::<G1Affine>(ctx,
                             u, 
                             vec![b_0],
                             Fr::NUM_BITS as usize,
-                            window_bits,
-                            true);
+                            window_bits);
     // println!("Circuit computes u_x_b_0: {:?}, {:?}", bigint_to_fe::<Fr>(&u_x_b_0.x.value), bigint_to_fe::<Fr>(&u_x_b_0.y.value)  );
     let g0_plus_ub0 = ecc_chip.add_unequal(ctx,
         &g_0,
         &u_x_b_0,
         true);
     //println!("Circuit computes g0_plus_ub0: {:?}, {:?}", bigint_to_fe::<Fr>(&g0_plus_ub0.x.value), bigint_to_fe::<Fr>(&g0_plus_ub0.y.value)  );
-    let second_q = ecc_chip.scalar_mult(ctx,
+    let second_q = ecc_chip.scalar_mult::<G1Affine>(ctx,
                             g0_plus_ub0, 
                             vec![final_a],
                             Fr::NUM_BITS as usize,
-                            window_bits,
-                            true);
+                            window_bits);
     // println!("Circuit computes first_q: {:?}, {:?}", bigint_to_fe::<Fr>(&first_q.x.value), bigint_to_fe::<Fr>(&first_q.y.value)  );
     // println!("Circuit computes second_q: {:?}, {:?}", bigint_to_fe::<Fr>(&second_q.x.value), bigint_to_fe::<Fr>(&second_q.y.value)  );
     // for sanity, print out the differences between the coordinates.
@@ -753,11 +751,12 @@ fn main() {
     let random_group_element = G1Affine::random(&mut OsRng);
     let random_group_elements = (0..256).map(|_| G1Affine::random(&mut OsRng)).collect::<Vec<_>>();
     let random_scalars = (0..256).map(|_| Fr::random(&mut OsRng)).collect::<Vec<_>>();
-    let batch_private_inputs = test_batch_ipa_export(8,10);
+    let random_batch_private_inputs = test_batch_ipa_export(8,10);
+    let structured_batch_private_inputs = structured_batch_ipa_export(8, 10);
     // run_builder_on_inputs(verify_single_ipa_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
     //run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
-    run_builder_on_inputs(verify_batch_ipa_proof, args, batch_private_inputs);
+    run_builder_on_inputs(verify_batch_ipa_proof, args, structured_batch_private_inputs);
     // run_builder_on_inputs(group_to_field, args, random_group_element);
     // run_builder_on_inputs(test_msm, args, (random_group_elements, random_scalars));
 }
