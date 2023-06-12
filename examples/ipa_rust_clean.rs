@@ -732,14 +732,14 @@ fn test_batched_ipa(){
         .map(|vector_to_commit| msm(&g_init, vector_to_commit))
         .collect::<Vec<G1Affine>>();
     let batch_proof = generate_batch_evaluation_proof(&g_init, &u, &vectors_to_commit, &vec_z);
-    let final_batch_IPA_proof = CompleteBatchIPAProof{
+    let final_batch_ipa_proof = CompleteBatchIPAProof{
         commitments,
         vec_z,
         batch_proof,
         g_init: g_init.clone(),
         u: u.clone(),
     };
-    let did_it_work = verify_batch_evaluation_proof(&final_batch_IPA_proof);
+    let did_it_work = verify_batch_evaluation_proof(&final_batch_ipa_proof);
     assert!(did_it_work);
 }
 
