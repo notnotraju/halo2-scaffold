@@ -752,7 +752,7 @@ fn main() {
     let random_group_elements = (0..256).map(|_| G1Affine::random(&mut OsRng)).collect::<Vec<_>>();
     let random_scalars = (0..256).map(|_| Fr::random(&mut OsRng)).collect::<Vec<_>>();
     let random_batch_private_inputs = test_batch_ipa_export(8,10);
-    let structured_batch_private_inputs = structured_batch_ipa_export(8, 10);
+    let structured_batch_private_inputs = structured_batch_ipa_export(6, 10);
     // run_builder_on_inputs(verify_single_ipa_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
     //run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
