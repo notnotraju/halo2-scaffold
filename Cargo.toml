@@ -25,11 +25,14 @@ poseidon = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "commun
 
 # Axiom fork of halo2, which we add to use their native poseidon implementation.
 poseidon-rust = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "poseidon" }
+
 # Axiom snark-verifier, which we use to load a native poseidon implementation
 # which is compatible with their PoseidonChip implementation. 
 snark-verifier = {git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "community-edition", default-features = false, features = ["loader_halo2"]}
+
 # Axiom ECC chip
 halo2-ecc = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
+
 # arithmetic
 group = "0.13.0"
 ff = "0.12.0"
