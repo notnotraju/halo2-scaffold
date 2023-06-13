@@ -307,8 +307,7 @@ pub fn compute_b_fin_poly(z: &Fr, stage_randomness: &[Fr])-> Fr{
 // namely g_init, z, and revealed evaluation, are all
 // assumed to be public.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProofOfInclusion {
-//    pub random_field_element: Fr,
+pub struct ProofOfEvaluation {
     pub revealed_evaluation: Fr, // element claimed to be revealed
     pub stage_proof: Vec<[G1Affine; 2]>,
     pub final_a: Fr,
@@ -321,10 +320,10 @@ pub struct BatchingHelperInfo{
     pub g_0: G1Affine,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BatchProofOfInclusion{
-    pub list_of_proofs: Vec<ProofOfInclusion>,
+pub struct BatchProofOfEvaluation{
+    pub list_of_proofs: Vec<ProofOfEvaluation>,
     pub commitment_to_weighted_poly: G1Affine,
-    pub proof_of_weighted_poly: ProofOfInclusion
+    pub proof_of_weighted_poly: ProofOfEvaluation
 }
 // contains all of the information we need for the verifier to
 // verify a single IPA proof.
@@ -332,7 +331,7 @@ pub struct BatchProofOfInclusion{
 pub struct CompleteSingleIPAProof{
     pub commitment: G1Affine,
     pub z: Fr,
-    pub proof: ProofOfInclusion,
+    pub proof: ProofOfEvaluation,
     pub g_init: Vec<G1Affine>,
     pub u: G1Affine,
 }
@@ -342,7 +341,7 @@ pub struct CompleteSingleIPAProof{
 pub struct CompleteBatchIPAProof {
     pub commitments: Vec<G1Affine>,
     pub vec_z: Vec<Fr>,
-    pub batch_proof: BatchProofOfInclusion,
+    pub batch_proof: BatchProofOfEvaluation,
     pub g_init: Vec<G1Affine>, // g_init is the same for all batched proofs.
     pub u: G1Affine
 }
@@ -358,7 +357,7 @@ pub fn generate_hasher()->Poseidon<Fr, 3, 2>{
 }
 
 // compute_randomness is a verifier util.
-// given a ProofOfInclusion, compute the vector stage_randomness.
+// given a ProofOfEvaluation, compute the vector stage_randomness.
 // this is simulating the Fiat-Shamir process, and outputs
 // a vector <w_k, ..., w_1>, where the numbering refers to 
 // the stage to which it corresponds. (see blog post or halo paper)
@@ -366,7 +365,7 @@ pub fn generate_hasher()->Poseidon<Fr, 3, 2>{
 // here, we have a use_poseidon flag, which is used to determine
 // if we use the Poseidon hash function as well. (As of now, we don't.)
 pub fn compute_randomness(
-    proof: &ProofOfInclusion,
+    proof: &ProofOfEvaluation,
     use_poseidon: bool) -> Vec<Fr> {
         let mut stage_randomness = Vec::new();
         let revealed_element = proof.revealed_evaluation;
@@ -408,7 +407,7 @@ pub fn compute_randomness(
 // the first is the product of the last elements of each stage_randomness vector
 // the second is the square of the first.
 // TODO: improve to a better hash function (once I get compatibility with e.g. Poseidon)
-pub fn compute_batching_randomness(proofs_of_inclusion: &[ProofOfInclusion])->[Fr; 2] {
+pub fn compute_batching_randomness(proofs_of_inclusion: &[ProofOfEvaluation])->[Fr; 2] {
     let first_randomness = 
         proofs_of_inclusion.iter()
         .map(|proof|
@@ -432,7 +431,7 @@ pub fn generate_single_evaluation_proof(
     u: &G1Affine,
     vector_to_commit: &Vec<Fr>,
     z: &Fr,
-    batching: bool) -> ProofOfInclusion {
+    batching: bool) -> ProofOfEvaluation {
     // n is the length of the vector to be commited.
     let n = g_init.len();
     assert!(check_power_of_two(n) && n == vector_to_commit.len());
@@ -526,7 +525,7 @@ pub fn generate_single_evaluation_proof(
     }
     else {None}
     };
-    ProofOfInclusion{
+    ProofOfEvaluation{
         revealed_evaluation: evaluation,
         stage_proof,
         final_a,
@@ -538,7 +537,7 @@ pub fn generate_batch_evaluation_proof(
     u: &G1Affine,
     vectors_to_commit: &Vec<Vec<Fr>>,
     vec_z: &Vec<Fr>,
-)-> BatchProofOfInclusion{
+)-> BatchProofOfEvaluation{
 
     assert!(vec_z.len() == vectors_to_commit.len());
     let n = g_init.len();
@@ -590,7 +589,7 @@ pub fn generate_batch_evaluation_proof(
     // now, we have the weighted polynomials. We need to compute the sum of these polynomials.
     // This is the batched polynomial.
     let proof_of_proofs = generate_single_evaluation_proof(g_init, u, &sum_of_weighted_polynomials, &t, false);
-    BatchProofOfInclusion {
+    BatchProofOfEvaluation {
         list_of_proofs,
         commitment_to_weighted_poly,
         proof_of_weighted_poly: proof_of_proofs,
