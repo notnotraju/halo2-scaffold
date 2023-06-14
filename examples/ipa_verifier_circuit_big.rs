@@ -1,3 +1,5 @@
+//! Example of scaffolding where function uses full `GateThreaderBuilder` instead of single `Context`
+
 mod binary_counting;
 use binary_counting::{binary_counting_reverse, binary_counting_input};
 
@@ -5,27 +7,39 @@ mod ipa_rust;
 use halo2_ecc::bigint::ProperCrtUint;
 use ipa_rust::{CompleteSingleIPAProof, 
     test_ipa_export, CompleteBatchIPAProof,
-    test_batch_ipa_export,
+    test_batch_ipa_export, hash_group_to_field,
     structured_batch_ipa_export};
 
 #[allow(unused_imports)]
 use ark_std::{start_timer, end_timer};
+use axiom_eth::rlp::builder;
+
+use halo2_base::gates::range;
+use halo2_base::halo2_proofs::plonk::Assigned;
+use halo2_base::utils::bigint_to_fe;
+use halo2_base::utils::biguint_to_fe;
+use halo2_base::utils::fe_to_biguint;
+use halo2_proofs::plonk::Circuit;
+
+
+use snark_verifier::loader::halo2::IntegerInstructions;
 // commented out before June 9th. I think this native implementation is not compatible with PoseidonChip
 // use poseidon_rust::Poseidon;
 
 // as of juin 9th, I comment out the rest of the Poseidon stuff.  
 // use snark_verifier::util::hash::OptimizedPoseidonSpec as Spec;
 // use snark_verifier::util::hash::Poseidon as Poseidon;
+use snark_verifier::loader::native::NativeLoader;
 
 
 use clap::Parser;
 
 // halo2_ecc
 use halo2_ecc::{
-    fields::{FpStrategy},
+    fields::{FpStrategy, FieldChip},
     ecc::{
         EccChip, EcPoint},
-        bn254::FpChip,
+        bn254::FpChip, bigint::CRTInteger,
 };
 
 
@@ -34,10 +48,11 @@ use halo2_ecc::{
 use halo2_base::{
     AssignedValue,
     Context,
-    QuantumCell::{Constant, Existing},
+    QuantumCell::{Constant, Existing, Witness},
     gates::{
         builder::{
-            GateThreadBuilder, 
+            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            RangeCircuitBuilder,
         },
         RangeChip,
         GateChip,
@@ -45,9 +60,13 @@ use halo2_base::{
     },
     
     halo2_proofs::{
-        arithmetic::{Field,},
+        arithmetic::{CurveAffine, Field, FieldExt},
+        dev::MockProver,
         halo2curves::{
-            bn256::{Fr, G1Affine}},
+            bn256::{Fr, G1, G1Affine, Fq},
+            group::Curve},
+        plonk::{ConstraintSystem, Error},
+        
     }
 };
 
@@ -88,10 +107,10 @@ pub struct MSMCircuitParams {
 // so I couldn't generate proofs to test the circuit.
 // In particular, native rust implementation (in Axiom's repo) seems inconsistent
 // with their PoseidonChip implementation
-// const T: usize = 3;
-// const RATE: usize = 2;
-// const R_F: usize = 8;
-// const R_P: usize = 33;
+const T: usize = 3;
+const RATE: usize = 2;
+const R_F: usize = 8;
+const R_P: usize = 33;
 
 
 // struct containing all of the information that a verifier
@@ -194,9 +213,7 @@ pub fn hash_group_to_field_circuit(
     let y = p.y.native();
     gate.add(ctx, *x, *y)    
   }
-
-// dummy function written to test the number of gates I need.
-// by far the lion's share of the constraints are in MSM.
+// written to test the number of gates I need.
   pub fn test_msm(
     builder: &mut GateThreadBuilder<Fr>,
     (p, s): (Vec<G1Affine>, Vec<Fr>),
@@ -735,11 +752,7 @@ fn main() {
     let random_group_elements = (0..256).map(|_| G1Affine::random(&mut OsRng)).collect::<Vec<_>>();
     let random_scalars = (0..256).map(|_| Fr::random(&mut OsRng)).collect::<Vec<_>>();
     let random_batch_private_inputs = test_batch_ipa_export(8,10);
-<<<<<<< HEAD
-    let structured_batch_private_inputs = structured_batch_ipa_export(6, 10);
-=======
-    let structured_batch_private_inputs = structured_batch_ipa_export(2, 10);
->>>>>>> 2ba6a17daab700c57d50b640ffd3d28125234ec5
+    let structured_batch_private_inputs = structured_batch_ipa_export(8, 10);
     // run_builder_on_inputs(verify_single_ipa_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
     //run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
