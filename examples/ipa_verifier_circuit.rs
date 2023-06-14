@@ -343,7 +343,6 @@ pub fn evaluate_folded_product_poly(
 // (I don't know how to make the commitment public!!)
 fn verify_single_ipa_proof(
     builder: &mut GateThreadBuilder<Fr>,
-    // params: &MSMCircuitParams,
     single_proof: CompleteSingleIPAProof,
     make_public: &mut Vec<AssignedValue<Fr>>,
 ){
@@ -617,7 +616,6 @@ pub fn load_complete_batch_ipa_proof(
 // batch verification. input is a CircuitCompleteBatchProof.
 pub fn verify_batch_ipa_proof(
     builder: &mut GateThreadBuilder<Fr>,
-    // params: &MSMCircuitParams,
     complete_batch_ipa_proof: CompleteBatchIPAProof,
     make_public: &mut Vec<AssignedValue<Fr>>,
 ){
@@ -735,11 +733,7 @@ fn main() {
     let random_group_elements = (0..256).map(|_| G1Affine::random(&mut OsRng)).collect::<Vec<_>>();
     let random_scalars = (0..256).map(|_| Fr::random(&mut OsRng)).collect::<Vec<_>>();
     let random_batch_private_inputs = test_batch_ipa_export(8,10);
-<<<<<<< HEAD
-    let structured_batch_private_inputs = structured_batch_ipa_export(6, 10);
-=======
     let structured_batch_private_inputs = structured_batch_ipa_export(2, 10);
->>>>>>> 2ba6a17daab700c57d50b640ffd3d28125234ec5
     // run_builder_on_inputs(verify_single_ipa_proof_hack, args, private_inputs);
     // let random_point = G1Affine::random(&mut OsRng);
     //run_builder_on_inputs(verify_single_ipa_proof, args, private_inputs);
