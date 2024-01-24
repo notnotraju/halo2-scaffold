@@ -1,3 +1,6 @@
+# IPA
+this modified repository, built on Axiom's halo2-lib, contains circuit code for verifying batch IPA proofs. For a deyailed description, see https://hackmd.io/@notnotraju/Hyou5EKUn
+
 # Halo2 Scaffolding
 
 This repository is intended to provide a playground for you to easily start writing a ZK circuit using the Halo2 proving stack.
